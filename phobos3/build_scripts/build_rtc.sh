@@ -1,0 +1,1 @@
+make clean; make TEST_CASE=rtc RUN_ENV=SRAM BOARD=FPGA DEBUG=1

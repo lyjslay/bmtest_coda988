@@ -1,0 +1,2 @@
+u8LowThr = 41
+u8LowThr = 35

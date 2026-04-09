@@ -1,0 +1,135 @@
+#ifndef _TESTCASE_SPACC_H_
+#define _TESTCASE_SPACC_H_
+
+typedef enum algo {
+	AES,
+	SM3,
+	SM4,
+	DES,
+	TDES,
+	SHA1,
+	SHA256,
+	BASE64,
+	BASE64_CUSTOMER,
+	BYPASS,
+} E_ALGO;
+
+typedef enum mode {
+	XXX,
+	ECB,
+	CBC,
+	CTR,
+	OFB,
+} E_MODE;
+
+typedef enum key_mode {
+	KEY_ZERO,
+	KEY_128BITS,
+	KEY_192BITS,
+	KEY_256BITS,
+	SM3_SECURE_KEY,
+} E_KEY_MODE;
+
+#define SPACC_DMA_CTRL 4 * 0x000
+
+#define SPACC_INT_MASK (4 * 0x001)
+#define SPACC_DES_BASE_L (4 * 0x002)
+#define SPACC_DES_BASE_H (4 * 0x003)
+#define SPACC_WR_INT (4 * 0x004)
+#define SPACC_SHA_PARA (4 * 0x070)
+
+#define SPACC_USE_BYPASS (1 << 8)
+#define SPACC_USE_AES (1 << 9)
+#define SPACC_USE_DES (1 << 10)
+#define SPACC_USE_SM4 (1 << 11)
+#define SPACC_USE_SHA (1 << 12)
+#define SPACC_USE_BASE (1 << 13)
+
+#define DES_SPACC_CTRL 0x000
+#define DES_SPACC_CIPHER 0x001
+#define DES_SPACC_SRC_ADDR_L 0x004
+#define DES_SPACC_SRC_ADDR_H 0x005
+#define DES_SPACC_DST_ADDR_L 0x006
+#define DES_SPACC_DST_ADDR_H 0x007
+#define DES_SPACC_DATA_AMOUNT_L 0x008
+#define DES_SPACC_DATA_AMOUNT_H 0x009
+#define DES_SPACC_KEY 0x00a
+#define DES_BASE64_SIZE 0x00a
+#define GetSpaccAddr(addrOff) (addrOff + SPACC_BASE)
+
+int testcase_spacc(void);
+
+// Register offset
+#define CRYPTODMA_DMA_CTRL 0x0
+#define CRYPTODMA_INT_MASK 0x4
+#define CRYPTODMA_DES_BASE_L 0x8
+#define CRYPTODMA_DES_BASE_H 0xC
+#define CRYPTODMA_WR_INT 0x10
+#define CRYPTODMA_SECURE_KEY_VALID 0x14
+#define CRYPTODMA_DES_KEY 0x100
+#define CRYPTODMA_DES_IV 0x180
+#define CRYPTODMA_SHA_PARA 0x1C0
+#define CRYPTODMA_SM3_PARA 0x1E0
+#define CRYPTODMA_BASE64_CUSTOMIZE_CODE 0x200
+
+// DMA Descriptor
+#define CRYPTODMA_CTRL 0x00
+#define CRYPTODMA_CIPHER 0x01
+#define CRYPTODMA_NEXT_PTR_ADDR_L 0x02
+#define CRYPTODMA_NEXT_PTR_ADDR_H 0x03
+#define CRYPTODMA_SRC_ADDR_L 0x04
+#define CRYPTODMA_SRC_ADDR_H 0x05
+#define CRYPTODMA_DST_ADDR_L 0x06
+#define CRYPTODMA_DST_ADDR_H 0x07
+#define CRYPTODMA_DATA_AMOUNT_L 0x08
+#define CRYPTODMA_DATA_AMOUNT_H 0x09
+#define BASE64_SIZE 0x0A
+#define CRYPTODMA_KEY 0x0A
+#define CRYPTODMA_IV 0x12
+
+#define DES_USE_BYPASS BIT(8)
+#define DES_USE_AES BIT(9)
+#define DES_USE_DES BIT(10)
+#define DES_USE_SM4 BIT(11)
+#define DES_USE_SHA BIT(12)
+#define DES_USE_BASE64 BIT(13)
+#define DES_USE_SM3 BIT(14)
+#define DES_USE_KEY0 BIT(16)
+#define DES_USE_KEY1 BIT(17)
+#define DES_USE_KEY2 BIT(18)
+#define DES_USE_DESCRIPTOR_KEY BIT(19)
+#define DES_USE_IV0 BIT(20)
+#define DES_USE_IV1 BIT(21)
+#define DES_USE_IV2 BIT(22)
+#define DES_USE_DESCRIPTOR_IV BIT(23)
+#define DES_USE_SECURE_KEY BIT(27)
+
+// Cipher control for AES
+#define DECRYPT_ENABLE 0x0
+#define CBC_ENABLE 0x1
+#define AES_KEY_MODE 0x4
+
+// DMA control
+#define DMA_ENABLE 1
+#define DMA_DESCRIPTOR_MODE 1
+#define DMA_READ_MAX_BURST 16 //16
+#define DMA_WRITE_MAX_BURST 16 //16
+
+//efuse
+#define EFUSE_MODE 0x000
+#define EFUSE_ADR 0x004
+#define EFUSE_DIR_CMD 0x008
+#define EFUSE_RD_DATA 0x00c
+#define EFUSE_STATUS 0x010
+#define EFUSE_FTSN0 0x100
+#define EFUSE_FTSN1 0x104
+#define EFUSE_SW_INFO 0x12c
+#define EFUSE_W_LOCK0 0x198
+#define EFUSE_W_LOCK1 0x19c
+#define SCS_config 0x1a0
+
+#define EFUSE_BUSY (1 << 0)
+
+#define SEC_TOP_BASE 0x020b0000
+#define SEC_CRYPTODMA_BASE 0x02060000
+#endif

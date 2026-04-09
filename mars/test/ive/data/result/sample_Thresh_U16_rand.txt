@@ -1,0 +1,2 @@
+enMode = 0: u16LowThr =  41, u16HighThr = 105, u8Min Mid Max (190, 132, 225)
+enMode = 1: u16LowThr = 108, u16HighThr = 121, u8Min Mid Max (174, 82, 144)

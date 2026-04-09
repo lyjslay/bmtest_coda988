@@ -1,0 +1,5 @@
+S16ToS8:      u8Numerator =  41, u16Denominator = 18508, s8Bias = 0    16BitTo8Bit mode 0
+S16ToU8ABS:   u8Numerator = 190, u16Denominator = 26690, s8Bias = 0    16BitTo8Bit mode 1
+S16ToU8SHIFT: u8Numerator = 225, u16Denominator = 15949, s8Bias = -42  16BitTo8Bit mode 2
+U16ToU8:      u8Numerator = 174, u16Denominator = 27136, s8Bias = 0    16BitTo8Bit mode 3
+

@@ -1,0 +1,1861 @@
+;Source Path Setting
+SourcePathReset
+AddSourcePath F:\jinf\source\bm1880
+AddSourcePath F:\jinf\source\bm1880\test\jpeg
+AddSourcePath F:\jinf\source\bm1880\test\jpeg\jdi
+AddSourcePath F:\jinf\source\bm1880\test\jpeg\jpuapi
+AddSourcePath F:\jinf\source\bm1880\test\jpeg\src
+SetDirSourcePath F:\jinf\source\bm1880
+SetDirSourcePath F:\jinf\source\bm1880\test\jpeg
+SetDirSourcePath F:\jinf\source\bm1880\test\jpeg\jdi
+SetDirSourcePath F:\jinf\source\bm1880\test\jpeg\jpuapi
+SetDirSourcePath F:\jinf\source\bm1880\test\jpeg\src
+;OPTION SET END
+
+&app_elf="F:\jinf\bm1880_jpeg.elf"
+
+winclear
+
+winpos 20% 0% 20% 100%
+AREA
+AREA.Clear
+
+ConnectAttach
+break;
+;ddr init
+print "Initial DDR ..."
+;; LoadBinary F:\xunli\scripts\bm1880_ddr_init.bin PM:0x4000000
+LoadBinary F:\xunli\cnm\test\bm1880\scripts\bm1880_ddr_init.bin PM:0x4000000
+;; LoadBinary F:\jinf\bm1880_ddr_init.bin PM:0x4000000
+setPC 0x4000000
+GO
+
+wait 1000.ms
+break
+print "Initial DDR DONE!"
+
+FILEOpen 23 "test.txt" %create ; open file test.txt , if not exist, create it.
+FileWrite 23 "####################################"
+FileWrite 23 "#   AUTO JPEG TESTING              #"
+FileWrite 23 "####################################"
+FileWrite 23 ""
+
+;;; + ;;;      ; CASE 1
+;;; + ;;;      print "CASE 1: Verify YUV420 decoder"
+;;; + ;;;      FileWrite 23 "##   CASE 1: Verify YUV420 decoder"
+;;; + ;;;      ;test_opt 1 decoder 2 encoder
+;;; + ;;;      MWriteS32 PM:0x13eff0000 1
+;;; + ;;;      ;comparatorFlag
+;;; + ;;;      MWriteS32 PM:0x13eff0004 1
+;;; + ;;;      
+;;; + ;;;      ;packedFormat Packed stream format output [0](PLANAR) [1](YUYV) [2](UYVY) [3](YVYU) [4](VYUY) [5](YUV_444 PACKED)
+;;; + ;;;      MWriteS32 PM:0x13eff0008 0
+;;; + ;;;      ;chromaInterleave
+;;; + ;;;      MWriteS32 PM:0x13eff000c 0
+;;; + ;;;      ;usePartialMode 0 disable 1 enable
+;;; + ;;;      MWriteS32 PM:0x13eff0010 0
+;;; + ;;;      ;partialBufNum Num of Frame Buffer[ 2 ~ 4 ]
+;;; + ;;;      MWriteS32 PM:0x13eff0014 4
+;;; + ;;;      ;rotAngle degrees(0, 90, 180, 270)
+;;; + ;;;      MWriteS32 PM:0x13eff0018 0
+;;; + ;;;      ;mirDir mirror direction(0-no mirror, 1-vertical, 2-horizontal, 3-both)
+;;; + ;;;      MWriteS32 PM:0x13eff001c 0
+;;; + ;;;      ;outNum Number of Images that you want to decode(0: decode continue, -1: loop)
+;;; + ;;;      MWriteS32 PM:0x13eff0020 1
+;;; + ;;;      ;picWidth(encoder) roiEnable(decoder)
+;;; + ;;;      MWriteS32 PM:0x13eff0024 0
+;;; + ;;;      ;picHeight(encoder) roiWidth(decoder)
+;;; + ;;;      MWriteS32 PM:0x13eff0028 0
+;;; + ;;;      ;roiHeight(decoder)
+;;; + ;;;      MWriteS32 PM:0x13eff002c 0
+;;; + ;;;      ;roiOffsetX(decoder)
+;;; + ;;;      MWriteS32 PM:0x13eff0030 0
+;;; + ;;;      ;roiOffsetY(decoder)
+;;; + ;;;      MWriteS32 PM:0x13eff0034 0
+;;; + ;;;      ;jpeg stream size(decoder)
+;;; + ;;;      MWriteS32 PM:0x13eff0038 0x23431
+;;; + ;;;      MWriteS32 PM:0x13eff1000 0xffffffff
+;;; + ;;;      
+;;; + ;;;      LoadBinary Z:\bm1880_kernel_bringup_jpeg\bmtest\bm1882\test\jpeg\fpga\dec.jpg 0x120600000
+;;; + ;;;      LoadBinary Z:\bm1880_kernel_bringup_jpeg\bmtest\bm1882\test\jpeg\fpga\2_yuv420.yuv 0x150000000
+
+			   LoadBinary Z:\bm1880_kernel_bringup_jpeg\bmtest\bm1882\test\jpeg\fpga\dec.jpg 0x10C000000
+			   LoadBinary Z:\bm1880_kernel_bringup_jpeg\bmtest\bm1882\test\jpeg\fpga\2_yuv420.yuv 0x109000000
+;;; + ;;;      
+;;; + ;;;      LoadImage &app_elf
+;;; + ;;;      gotostart
+;;; + ;;;      DELeteBreak
+;;; + ;;;      SetBREAK test_jpeg_exit %HW
+;;; + ;;;      go
+;;; + ;;;      
+;;; + ;;;      wait !isrun()
+;;; + ;;;      LCOAL &decret
+;;; + ;;;      &decret=MREAD("S16", pm:0x13eff1000)
+;;; + ;;;      IF &decret!=0x00000001
+;;; + ;;;      (
+;;; + ;;;      	FileWrite 23 "CASE 1 testing passed!"
+;;; + ;;;          print "CASE 1 testing passed!"
+;;; + ;;;      )
+;;; + ;;;      ELSE
+;;; + ;;;      (
+;;; + ;;;      	FileWrite 23 "CASE 1 testing failed"
+;;; + ;;;          print "CASE 1 testing failed"
+;;; + ;;;      )
+;;; + ;;;      FileWrite 23 ""
+;;; + ;;;      
+;;; + ;;;      ; CASE 2
+;;; + ;;;      print "CASE 2: Verify YUV420 encoder"
+;;; + ;;;      FileWrite 23 "##   CASE 2: Verify YUV420 encoder"
+;;; + ;;;      ;test_opt 1 decoder 2 encoder
+;;; + ;;;      MWriteS32 PM:0x13eff0000 2
+;;; + ;;;      ;comparatorFlag
+;;; + ;;;      MWriteS32 PM:0x13eff0004 1
+;;; + ;;;      
+;;; + ;;;      ;packedFormat Packed stream format output [0](PLANAR) [1](YUYV) [2](UYVY) [3](YVYU) [4](VYUY) [5](YUV_444 PACKED)
+;;; + ;;;      MWriteS32 PM:0x13eff0008 0
+;;; + ;;;      ;chromaInterleave
+;;; + ;;;      MWriteS32 PM:0x13eff000c 0
+;;; + ;;;      ;usePartialMode 0 disable 1 enable
+;;; + ;;;      MWriteS32 PM:0x13eff0010 0
+;;; + ;;;      ;partialBufNum Num of Frame Buffer[ 2 ~ 4 ]
+;;; + ;;;      MWriteS32 PM:0x13eff0014 4
+;;; + ;;;      ;rotAngle degrees(0, 90, 180, 270)
+;;; + ;;;      MWriteS32 PM:0x13eff0018 0
+;;; + ;;;      ;mirDir mirror direction(0-no mirror, 1-vertical, 2-horizontal, 3-both)
+;;; + ;;;      MWriteS32 PM:0x13eff001c 0
+;;; + ;;;      ;outNum Number of Images that you want to decode(0: decode continue, -1: loop)
+;;; + ;;;      MWriteS32 PM:0x13eff0020 1
+;;; + ;;;      ;picWidth(encoder) roiEnable(decoder)
+;;; + ;;;      MWriteS32 PM:0x13eff0024 0x500 ; 1280  ; 
+;;; + ;;;      ;picHeight(encoder) roiWidth(decoder)
+;;; + ;;;      MWriteS32 PM:0x13eff0028 0x400 ; 1024   ; 
+;;; + ;;;      ;roiHeight(decoder) mjpgChromaFormat(encoder Source Chroma Format 0 (4:2:0) / 1 (4:2:2) / 2 (2:2:4 4:2:2 rotated) / 3 (4:4:4) / 4 (4:0:0)) 
+;;; + ;;;      MWriteS32 PM:0x13eff002c 0
+;;; + ;;;      ;roiOffsetX(decoder)
+;;; + ;;;      MWriteS32 PM:0x13eff0030 0
+;;; + ;;;      ;roiOffsetY(decoder)
+;;; + ;;;      MWriteS32 PM:0x13eff0034 0
+;;; + ;;;      ;jpeg stream size(decoder)
+;;; + ;;;      MWriteS32 PM:0x13eff0038 40681
+;;; + ;;;      
+;;; + ;;;      LoadBinary F:\jinf\picture\2_yuv420.yuv 0x123600000
+;;; + ;;;      LoadBinary F:\jinf\picture\2_yuv420_enc.jpg 0x154000000
+;;; + ;;;      LoadImage &app_elf
+;;; + ;;;      
+;;; + ;;;      gotostart
+;;; + ;;;      DELeteBreak
+;;; + ;;;      SetBREAK test_jpeg_exit %HW
+;;; + ;;;      go
+;;; + ;;;      
+;;; + ;;;      wait !isrun()
+;;; + ;;;      LCOAL &decret
+;;; + ;;;      &decret=MREAD("S16", pm:0x13eff1000)
+;;; + ;;;      IF &decret!=0x00000001
+;;; + ;;;      (
+;;; + ;;;      	FileWrite 23 "CASE 2 testing passed!"
+;;; + ;;;          print "CASE 2 testing passed!"
+;;; + ;;;      )
+;;; + ;;;      ELSE
+;;; + ;;;      (
+;;; + ;;;      	FileWrite 23 "CASE 2 testing failed"
+;;; + ;;;          print "CASE 2 testing failed"
+;;; + ;;;      )
+;;; + ;;;      FileWrite 23 ""
+;;; + ;;;      
+;;; + ;;;      ; CASE 3
+;;; + ;;;      print "CASE 3: Verify YUV422 decoder"
+;;; + ;;;      FileWrite 23 "##   CASE 3: Verify YUV422 decoder"
+;;; + ;;;      
+;;; + ;;;      ;test_opt 1 decoder 2 encoder
+;;; + ;;;      MWriteS32 PM:0x13eff0000 1
+;;; + ;;;      ;comparatorFlag
+;;; + ;;;      MWriteS32 PM:0x13eff0004 1
+;;; + ;;;      
+;;; + ;;;      ;packedFormat Packed stream format output [0](PLANAR) [1](YUYV) [2](UYVY) [3](YVYU) [4](VYUY) [5](YUV_444 PACKED)
+;;; + ;;;      MWriteS32 PM:0x13eff0008 0
+;;; + ;;;      ;chromaInterleave
+;;; + ;;;      MWriteS32 PM:0x13eff000c 0
+;;; + ;;;      ;usePartialMode 0 disable 1 enable
+;;; + ;;;      MWriteS32 PM:0x13eff0010 0
+;;; + ;;;      ;partialBufNum Num of Frame Buffer[ 2 ~ 4 ]
+;;; + ;;;      MWriteS32 PM:0x13eff0014 4
+;;; + ;;;      ;rotAngle degrees(0, 90, 180, 270)
+;;; + ;;;      MWriteS32 PM:0x13eff0018 0
+;;; + ;;;      ;mirDir mirror direction(0-no mirror, 1-vertical, 2-horizontal, 3-both)
+;;; + ;;;      MWriteS32 PM:0x13eff001c 0
+;;; + ;;;      ;outNum Number of Images that you want to decode(0: decode continue, -1: loop)
+;;; + ;;;      MWriteS32 PM:0x13eff0020 1
+;;; + ;;;      ;picWidth(encoder) roiEnable(decoder)
+;;; + ;;;      MWriteS32 PM:0x13eff0024 0
+;;; + ;;;      ;picHeight(encoder) roiWidth(decoder)
+;;; + ;;;      MWriteS32 PM:0x13eff0028 0
+;;; + ;;;      ;roiHeight(decoder)
+;;; + ;;;      MWriteS32 PM:0x13eff002c 0
+;;; + ;;;      ;roiOffsetX(decoder)
+;;; + ;;;      MWriteS32 PM:0x13eff0030 0
+;;; + ;;;      ;roiOffsetY(decoder)
+;;; + ;;;      MWriteS32 PM:0x13eff0034 0
+;;; + ;;;      ;jpeg stream size(decoder)
+;;; + ;;;      MWriteS32 PM:0x13eff0038 0x17A30A
+;;; + ;;;      MWriteS32 PM:0x13eff1000 0xffffffff
+;;; + ;;;      
+;;; + ;;;      LoadBinary F:\jinf\picture\jpeg422jfif.jpg 0x120600000
+;;; + ;;;      LoadBinary F:\jinf\picture\jpeg422jfif.yuv 0x150000000
+;;; + ;;;      
+;;; + ;;;      LoadImage &app_elf
+;;; + ;;;      gotostart
+;;; + ;;;      DELeteBreak
+;;; + ;;;      SetBREAK test_jpeg_exit %HW
+;;; + ;;;      go
+;;; + ;;;      
+;;; + ;;;      wait !isrun()
+;;; + ;;;      LCOAL &decret
+;;; + ;;;      &decret=MREAD("S16", pm:0x13eff1000)
+;;; + ;;;      IF &decret!=0x00000001
+;;; + ;;;      (
+;;; + ;;;      	FileWrite 23 "CASE 3 testing passed!"
+;;; + ;;;          print "CASE 3 testing passed!"
+;;; + ;;;      )
+;;; + ;;;      ELSE
+;;; + ;;;      (
+;;; + ;;;      	FileWrite 23 "CASE 3 testing failed"
+;;; + ;;;          print "CASE 3 testing failed"
+;;; + ;;;      )
+;;; + ;;;      FileWrite 23 ""
+;;; + ;;;      
+;;; + ;;;      ; CASE 4
+;;; + ;;;      print "CASE 4: Verify YUV422 encoder"
+;;; + ;;;      FileWrite 23 "##   CASE 4: Verify YUV422 encoder"
+;;; + ;;;      
+;;; + ;;;      ;test_opt 1 decoder 2 encoder
+;;; + ;;;      MWriteS32 PM:0x13eff0000 2
+;;; + ;;;      ;comparatorFlag
+;;; + ;;;      MWriteS32 PM:0x13eff0004 1
+;;; + ;;;      
+;;; + ;;;      ;packedFormat Packed stream format output [0](PLANAR) [1](YUYV) [2](UYVY) [3](YVYU) [4](VYUY) [5](YUV_444 PACKED)
+;;; + ;;;      MWriteS32 PM:0x13eff0008 0
+;;; + ;;;      ;chromaInterleave
+;;; + ;;;      MWriteS32 PM:0x13eff000c 0
+;;; + ;;;      ;usePartialMode 0 disable 1 enable
+;;; + ;;;      MWriteS32 PM:0x13eff0010 0
+;;; + ;;;      ;partialBufNum Num of Frame Buffer[ 2 ~ 4 ]
+;;; + ;;;      MWriteS32 PM:0x13eff0014 4
+;;; + ;;;      ;rotAngle degrees(0, 90, 180, 270)
+;;; + ;;;      MWriteS32 PM:0x13eff0018 0
+;;; + ;;;      ;mirDir mirror direction(0-no mirror, 1-vertical, 2-horizontal, 3-both)
+;;; + ;;;      MWriteS32 PM:0x13eff001c 0
+;;; + ;;;      ;outNum Number of Images that you want to decode(0: decode continue, -1: loop)
+;;; + ;;;      MWriteS32 PM:0x13eff0020 1
+;;; + ;;;      ;picWidth(encoder) roiEnable(decoder)
+;;; + ;;;      MWriteS32 PM:0x13eff0024 0x800 ; 2048  ; 
+;;; + ;;;      ;picHeight(encoder) roiWidth(decoder)
+;;; + ;;;      MWriteS32 PM:0x13eff0028 0x600 ; 1536  ; 
+;;; + ;;;      ;roiHeight(decoder) mjpgChromaFormat(encoder Source Chroma Format 0 (4:2:0) / 1 (4:2:2) / 2 (2:2:4 4:2:2 rotated) / 3 (4:4:4) / 4 (4:0:0)) 
+;;; + ;;;      MWriteS32 PM:0x13eff002c 1
+;;; + ;;;      ;roiOffsetX(decoder)
+;;; + ;;;      MWriteS32 PM:0x13eff0030 0
+;;; + ;;;      ;roiOffsetY(decoder)
+;;; + ;;;      MWriteS32 PM:0x13eff0034 0
+;;; + ;;;      ;jpeg stream size(decoder)
+;;; + ;;;      MWriteS32 PM:0x13eff0038 40681
+;;; + ;;;      
+;;; + ;;;      LoadBinary F:\jinf\picture\jpeg422jfif.yuv 0x123600000
+;;; + ;;;      LoadBinary F:\jinf\picture\jpeg422jfif_enc.jpg 0x154000000
+;;; + ;;;      LoadImage &app_elf
+;;; + ;;;      
+;;; + ;;;      gotostart
+;;; + ;;;      DELeteBreak
+;;; + ;;;      SetBREAK test_jpeg_exit %HW
+;;; + ;;;      go
+;;; + ;;;      
+;;; + ;;;      wait !isrun()
+;;; + ;;;      LCOAL &decret
+;;; + ;;;      &decret=MREAD("S16", pm:0x13eff1000)
+;;; + ;;;      IF &decret!=0x00000001
+;;; + ;;;      (
+;;; + ;;;      	FileWrite 23 "CASE 4 testing passed!"
+;;; + ;;;          print "CASE 4 testing passed!"
+;;; + ;;;      )
+;;; + ;;;      ELSE
+;;; + ;;;      (
+;;; + ;;;      	FileWrite 23 "CASE 4 testing failed"
+;;; + ;;;          print "CASE 4 testing failed"
+;;; + ;;;      )
+;;; + ;;;      FileWrite 23 ""
+;;; + ;;;      
+;;; + ;;;      ; CASE 5
+;;; + ;;;      print "CASE 5: Verify YUV444 decoder"
+;;; + ;;;      FileWrite 23 "##   CASE 5: Verify YUV444 decoder"
+;;; + ;;;      
+;;; + ;;;      ;test_opt 1 decoder 2 encoder
+;;; + ;;;      MWriteS32 PM:0x13eff0000 1
+;;; + ;;;      ;comparatorFlag
+;;; + ;;;      MWriteS32 PM:0x13eff0004 1
+;;; + ;;;      
+;;; + ;;;      ;packedFormat Packed stream format output [0](PLANAR) [1](YUYV) [2](UYVY) [3](YVYU) [4](VYUY) [5](YUV_444 PACKED)
+;;; + ;;;      MWriteS32 PM:0x13eff0008 0
+;;; + ;;;      ;chromaInterleave
+;;; + ;;;      MWriteS32 PM:0x13eff000c 0
+;;; + ;;;      ;usePartialMode 0 disable 1 enable
+;;; + ;;;      MWriteS32 PM:0x13eff0010 0
+;;; + ;;;      ;partialBufNum Num of Frame Buffer[ 2 ~ 4 ]
+;;; + ;;;      MWriteS32 PM:0x13eff0014 4
+;;; + ;;;      ;rotAngle degrees(0, 90, 180, 270)
+;;; + ;;;      MWriteS32 PM:0x13eff0018 0
+;;; + ;;;      ;mirDir mirror direction(0-no mirror, 1-vertical, 2-horizontal, 3-both)
+;;; + ;;;      MWriteS32 PM:0x13eff001c 0
+;;; + ;;;      ;outNum Number of Images that you want to decode(0: decode continue, -1: loop)
+;;; + ;;;      MWriteS32 PM:0x13eff0020 1
+;;; + ;;;      ;picWidth(encoder) roiEnable(decoder)
+;;; + ;;;      MWriteS32 PM:0x13eff0024 0
+;;; + ;;;      ;picHeight(encoder) roiWidth(decoder)
+;;; + ;;;      MWriteS32 PM:0x13eff0028 0
+;;; + ;;;      ;roiHeight(decoder)
+;;; + ;;;      MWriteS32 PM:0x13eff002c 0
+;;; + ;;;      ;roiOffsetX(decoder)
+;;; + ;;;      MWriteS32 PM:0x13eff0030 0
+;;; + ;;;      ;roiOffsetY(decoder)
+;;; + ;;;      MWriteS32 PM:0x13eff0034 0
+;;; + ;;;      ;jpeg stream size(decoder)
+;;; + ;;;      MWriteS32 PM:0x13eff0038 0x18E18
+;;; + ;;;      MWriteS32 PM:0x13eff1000 0xffffffff
+;;; + ;;;      
+;;; + ;;;      LoadBinary F:\jinf\picture\1_yuv444_512x512.jpg 0x120600000
+;;; + ;;;      LoadBinary F:\jinf\picture\1_yuv444_512x512.yuv 0x150000000
+;;; + ;;;      
+;;; + ;;;      LoadImage &app_elf
+;;; + ;;;      gotostart
+;;; + ;;;      DELeteBreak
+;;; + ;;;      SetBREAK test_jpeg_exit %HW
+;;; + ;;;      go
+;;; + ;;;      
+;;; + ;;;      wait !isrun()
+;;; + ;;;      LCOAL &decret
+;;; + ;;;      &decret=MREAD("S16", pm:0x13eff1000)
+;;; + ;;;      IF &decret!=0x00000001
+;;; + ;;;      (
+;;; + ;;;      	FileWrite 23 "CASE 5 testing passed!"
+;;; + ;;;          print "CASE 5 testing passed!"
+;;; + ;;;      )
+;;; + ;;;      ELSE
+;;; + ;;;      (
+;;; + ;;;      	FileWrite 23 "CASE 5 testing failed"
+;;; + ;;;          print "CASE 5 testing failed"
+;;; + ;;;      )
+;;; + ;;;      FileWrite 23 ""
+;;; + ;;;      
+;;; + ;;;      ; CASE 6
+;;; + ;;;      print "CASE 6: Verify YUV444 encoder"
+;;; + ;;;      FileWrite 23 "##   CASE 6: Verify YUV444 encoder"
+;;; + ;;;      
+;;; + ;;;      ;test_opt 1 decoder 2 encoder
+;;; + ;;;      MWriteS32 PM:0x13eff0000 2
+;;; + ;;;      ;comparatorFlag
+;;; + ;;;      MWriteS32 PM:0x13eff0004 1
+;;; + ;;;      
+;;; + ;;;      ;packedFormat Packed stream format output [0](PLANAR) [1](YUYV) [2](UYVY) [3](YVYU) [4](VYUY) [5](YUV_444 PACKED)
+;;; + ;;;      MWriteS32 PM:0x13eff0008 0
+;;; + ;;;      ;chromaInterleave
+;;; + ;;;      MWriteS32 PM:0x13eff000c 0
+;;; + ;;;      ;usePartialMode 0 disable 1 enable
+;;; + ;;;      MWriteS32 PM:0x13eff0010 0
+;;; + ;;;      ;partialBufNum Num of Frame Buffer[ 2 ~ 4 ]
+;;; + ;;;      MWriteS32 PM:0x13eff0014 4
+;;; + ;;;      ;rotAngle degrees(0, 90, 180, 270)
+;;; + ;;;      MWriteS32 PM:0x13eff0018 0
+;;; + ;;;      ;mirDir mirror direction(0-no mirror, 1-vertical, 2-horizontal, 3-both)
+;;; + ;;;      MWriteS32 PM:0x13eff001c 0
+;;; + ;;;      ;outNum Number of Images that you want to decode(0: decode continue, -1: loop)
+;;; + ;;;      MWriteS32 PM:0x13eff0020 1
+;;; + ;;;      ;picWidth(encoder) roiEnable(decoder)
+;;; + ;;;      MWriteS32 PM:0x13eff0024 0x200  ; 512
+;;; + ;;;      ;picHeight(encoder) roiWidth(decoder)
+;;; + ;;;      MWriteS32 PM:0x13eff0028 0x200  ; 512
+;;; + ;;;      ;roiHeight(decoder) mjpgChromaFormat(encoder Source Chroma Format 0 (4:2:0) / 1 (4:2:2) / 2 (2:2:4 4:2:2 rotated) / 3 (4:4:4) / 4 (4:0:0)) 
+;;; + ;;;      MWriteS32 PM:0x13eff002c 3 ; 4:4:4
+;;; + ;;;      ;roiOffsetX(decoder)
+;;; + ;;;      MWriteS32 PM:0x13eff0030 0
+;;; + ;;;      ;roiOffsetY(decoder)
+;;; + ;;;      MWriteS32 PM:0x13eff0034 0
+;;; + ;;;      ;jpeg stream size(decoder)
+;;; + ;;;      MWriteS32 PM:0x13eff0038 40681
+;;; + ;;;      
+;;; + ;;;      LoadBinary F:\jinf\picture\2_yuv444_512x512.yuv 0x123600000
+;;; + ;;;      LoadBinary F:\jinf\picture\2_yuv444_512x512_enc.jpg 0x154000000
+;;; + ;;;      LoadImage &app_elf
+;;; + ;;;      
+;;; + ;;;      gotostart
+;;; + ;;;      DELeteBreak
+;;; + ;;;      SetBREAK test_jpeg_exit %HW
+;;; + ;;;      go
+;;; + ;;;      
+;;; + ;;;      wait !isrun()
+;;; + ;;;      LCOAL &decret
+;;; + ;;;      &decret=MREAD("S16", pm:0x13eff1000)
+;;; + ;;;      IF &decret!=0x00000001
+;;; + ;;;      (
+;;; + ;;;      	FileWrite 23 "CASE 6 testing passed!"
+;;; + ;;;          print "CASE 6 testing passed!"
+;;; + ;;;      )
+;;; + ;;;      ELSE
+;;; + ;;;      (
+;;; + ;;;      	FileWrite 23 "CASE 6 testing failed"
+;;; + ;;;          print "CASE 6 testing failed"
+;;; + ;;;      )
+;;; + ;;;      FileWrite 23 ""
+;;; + ;;;      
+;;; + ;;;      ; CASE 7
+;;; + ;;;      print "CASE 7: Verify YUV400 decoder"
+;;; + ;;;      FileWrite 23 "##   CASE 7: Verify YUV400 decoder"
+;;; + ;;;      
+;;; + ;;;      ;test_opt 1 decoder 2 encoder
+;;; + ;;;      MWriteS32 PM:0x13eff0000 1
+;;; + ;;;      ;comparatorFlag
+;;; + ;;;      MWriteS32 PM:0x13eff0004 1
+;;; + ;;;      
+;;; + ;;;      ;packedFormat Packed stream format output [0](PLANAR) [1](YUYV) [2](UYVY) [3](YVYU) [4](VYUY) [5](YUV_444 PACKED)
+;;; + ;;;      MWriteS32 PM:0x13eff0008 0
+;;; + ;;;      ;chromaInterleave
+;;; + ;;;      MWriteS32 PM:0x13eff000c 0
+;;; + ;;;      ;usePartialMode 0 disable 1 enable
+;;; + ;;;      MWriteS32 PM:0x13eff0010 0
+;;; + ;;;      ;partialBufNum Num of Frame Buffer[ 2 ~ 4 ]
+;;; + ;;;      MWriteS32 PM:0x13eff0014 4
+;;; + ;;;      ;rotAngle degrees(0, 90, 180, 270)
+;;; + ;;;      MWriteS32 PM:0x13eff0018 0
+;;; + ;;;      ;mirDir mirror direction(0-no mirror, 1-vertical, 2-horizontal, 3-both)
+;;; + ;;;      MWriteS32 PM:0x13eff001c 0
+;;; + ;;;      ;outNum Number of Images that you want to decode(0: decode continue, -1: loop)
+;;; + ;;;      MWriteS32 PM:0x13eff0020 1
+;;; + ;;;      ;picWidth(encoder) roiEnable(decoder)
+;;; + ;;;      MWriteS32 PM:0x13eff0024 0
+;;; + ;;;      ;picHeight(encoder) roiWidth(decoder)
+;;; + ;;;      MWriteS32 PM:0x13eff0028 0
+;;; + ;;;      ;roiHeight(decoder)
+;;; + ;;;      MWriteS32 PM:0x13eff002c 0
+;;; + ;;;      ;roiOffsetX(decoder)
+;;; + ;;;      MWriteS32 PM:0x13eff0030 0
+;;; + ;;;      ;roiOffsetY(decoder)
+;;; + ;;;      MWriteS32 PM:0x13eff0034 0
+;;; + ;;;      ;jpeg stream size(decoder)
+;;; + ;;;      MWriteS32 PM:0x13eff0038 0xB00A
+;;; + ;;;      MWriteS32 PM:0x13eff1000 0xffffffff
+;;; + ;;;      
+;;; + ;;;      LoadBinary F:\jinf\picture\jpeg400jfif.jpg 0x120600000
+;;; + ;;;      LoadBinary F:\jinf\picture\jpeg400jfif.yuv 0x150000000
+;;; + ;;;      
+;;; + ;;;      LoadImage &app_elf
+;;; + ;;;      gotostart
+;;; + ;;;      DELeteBreak
+;;; + ;;;      SetBREAK test_jpeg_exit %HW
+;;; + ;;;      go
+;;; + ;;;      
+;;; + ;;;      wait !isrun()
+;;; + ;;;      LCOAL &decret
+;;; + ;;;      &decret=MREAD("S16", pm:0x13eff1000)
+;;; + ;;;      IF &decret!=0x00000001
+;;; + ;;;      (
+;;; + ;;;      	FileWrite 23 "CASE 7 testing passed!"
+;;; + ;;;          print "CASE 7 testing passed!"
+;;; + ;;;      )
+;;; + ;;;      ELSE
+;;; + ;;;      (
+;;; + ;;;      	FileWrite 23 "CASE 7 testing failed"
+;;; + ;;;          print "CASE 7 testing failed"
+;;; + ;;;      )
+;;; + ;;;      FileWrite 23 ""
+;;; + ;;;      
+;;; + ;;;      ; CASE 8
+;;; + ;;;      print "CASE 8: Verify YUV400 encoder"
+;;; + ;;;      FileWrite 23 "##   CASE 8: Verify YUV400 encoder"
+;;; + ;;;      
+;;; + ;;;      ;test_opt 1 decoder 2 encoder
+;;; + ;;;      MWriteS32 PM:0x13eff0000 2
+;;; + ;;;      ;comparatorFlag
+;;; + ;;;      MWriteS32 PM:0x13eff0004 1
+;;; + ;;;      
+;;; + ;;;      ;packedFormat Packed stream format output [0](PLANAR) [1](YUYV) [2](UYVY) [3](YVYU) [4](VYUY) [5](YUV_444 PACKED)
+;;; + ;;;      MWriteS32 PM:0x13eff0008 0
+;;; + ;;;      ;chromaInterleave
+;;; + ;;;      MWriteS32 PM:0x13eff000c 0
+;;; + ;;;      ;usePartialMode 0 disable 1 enable
+;;; + ;;;      MWriteS32 PM:0x13eff0010 0
+;;; + ;;;      ;partialBufNum Num of Frame Buffer[ 2 ~ 4 ]
+;;; + ;;;      MWriteS32 PM:0x13eff0014 4
+;;; + ;;;      ;rotAngle degrees(0, 90, 180, 270)
+;;; + ;;;      MWriteS32 PM:0x13eff0018 0
+;;; + ;;;      ;mirDir mirror direction(0-no mirror, 1-vertical, 2-horizontal, 3-both)
+;;; + ;;;      MWriteS32 PM:0x13eff001c 0
+;;; + ;;;      ;outNum Number of Images that you want to decode(0: decode continue, -1: loop)
+;;; + ;;;      MWriteS32 PM:0x13eff0020 1
+;;; + ;;;      ;picWidth(encoder) roiEnable(decoder)
+;;; + ;;;      MWriteS32 PM:0x13eff0024 0x200 ; 512 ;
+;;; + ;;;      ;picHeight(encoder) roiWidth(decoder)
+;;; + ;;;      MWriteS32 PM:0x13eff0028 0x200 ; 512 ;
+;;; + ;;;      ;roiHeight(decoder) mjpgChromaFormat(encoder Source Chroma Format 0 (4:2:0) / 1 (4:2:2) / 2 (2:2:4 4:2:2 rotated) / 3 (4:4:4) / 4 (4:0:0)) 
+;;; + ;;;      MWriteS32 PM:0x13eff002c 4 ; 4:0:0
+;;; + ;;;      ;roiOffsetX(decoder)
+;;; + ;;;      MWriteS32 PM:0x13eff0030 0
+;;; + ;;;      ;roiOffsetY(decoder)
+;;; + ;;;      MWriteS32 PM:0x13eff0034 0
+;;; + ;;;      ;jpeg stream size(decoder)
+;;; + ;;;      MWriteS32 PM:0x13eff0038 40681
+;;; + ;;;      
+;;; + ;;;      LoadBinary F:\jinf\picture\400.yuv 0x123600000
+;;; + ;;;      LoadBinary F:\jinf\picture\400_enc.jpg 0x154000000
+;;; + ;;;      LoadImage &app_elf
+;;; + ;;;      
+;;; + ;;;      gotostart
+;;; + ;;;      DELeteBreak
+;;; + ;;;      SetBREAK test_jpeg_exit %HW
+;;; + ;;;      go
+;;; + ;;;      
+;;; + ;;;      wait !isrun()
+;;; + ;;;      LCOAL &decret
+;;; + ;;;      &decret=MREAD("S16", pm:0x13eff1000)
+;;; + ;;;      IF &decret!=0x00000001
+;;; + ;;;      (
+;;; + ;;;      	FileWrite 23 "CASE 8 testing passed!"
+;;; + ;;;          print "CASE 8 testing passed!"
+;;; + ;;;      )
+;;; + ;;;      ELSE
+;;; + ;;;      (
+;;; + ;;;      	FileWrite 23 "CASE 8 testing failed"
+;;; + ;;;          print "CASE 8 testing failed"
+;;; + ;;;      )
+;;; + ;;;      FileWrite 23 ""
+
+; CASE 9.1
+print "CASE 9.1: Verify picture decoder with rotate"
+FileWrite 23 "##   CASE 9.1: Verify picture decoder with rotate"
+
+;test_opt 1 decoder 2 encoder
+MWriteS32 PM:0x13eff0000 1
+;comparatorFlag
+MWriteS32 PM:0x13eff0004 1
+
+;packedFormat Packed stream format output [0](PLANAR) [1](YUYV) [2](UYVY) [3](YVYU) [4](VYUY) [5](YUV_444 PACKED)
+MWriteS32 PM:0x13eff0008 0
+;chromaInterleave
+MWriteS32 PM:0x13eff000c 0
+;usePartialMode 0 disable 1 enable
+MWriteS32 PM:0x13eff0010 0
+;partialBufNum Num of Frame Buffer[ 2 ~ 4 ]
+MWriteS32 PM:0x13eff0014 4
+;rotAngle degrees(0, 90, 180, 270)
+MWriteS32 PM:0x13eff0018 0x5A
+;mirDir mirror direction(0-no mirror, 1-vertical, 2-horizontal, 3-both)
+MWriteS32 PM:0x13eff001c 0
+;outNum Number of Images that you want to decode(0: decode continue, -1: loop)
+MWriteS32 PM:0x13eff0020 1
+;picWidth(encoder) roiEnable(decoder)
+MWriteS32 PM:0x13eff0024 0
+;picHeight(encoder) roiWidth(decoder)
+MWriteS32 PM:0x13eff0028 0
+;roiHeight(decoder)
+MWriteS32 PM:0x13eff002c 0
+;roiOffsetX(decoder)
+MWriteS32 PM:0x13eff0030 0
+;roiOffsetY(decoder)
+MWriteS32 PM:0x13eff0034 0
+;jpeg stream size(decoder)
+MWriteS32 PM:0x13eff0038 0x85D8
+MWriteS32 PM:0x13eff1000 0xffffffff
+
+LoadBinary F:\jinf\picture\2_yuv420_512x512.jpg 0x120600000
+LoadBinary F:\jinf\picture\2_yuv420_512x512_g_1.yuv 0x150000000
+
+LoadImage &app_elf
+gotostart
+DELeteBreak
+SetBREAK test_jpeg_exit %HW
+go
+
+wait !isrun()
+LCOAL &decret
+&decret=MREAD("S16", pm:0x13eff1000)
+IF &decret!=0x00000001
+(
+	FileWrite 23 "CASE 9.1 testing passed!"
+    print "CASE 9.1 testing passed!"
+)
+ELSE
+(
+	FileWrite 23 "CASE 9.1 testing failed"
+    print "CASE 9.1 testing failed"
+)
+FileWrite 23 ""
+
+; CASE 9.2
+print "CASE 9.2: Verify picture decoder with rotate"
+FileWrite 23 "##   CASE 9.2: Verify picture decoder with rotate"
+
+;test_opt 1 decoder 2 encoder
+MWriteS32 PM:0x13eff0000 1
+;comparatorFlag
+MWriteS32 PM:0x13eff0004 1
+
+;packedFormat Packed stream format output [0](PLANAR) [1](YUYV) [2](UYVY) [3](YVYU) [4](VYUY) [5](YUV_444 PACKED)
+MWriteS32 PM:0x13eff0008 0
+;chromaInterleave
+MWriteS32 PM:0x13eff000c 0
+;usePartialMode 0 disable 1 enable
+MWriteS32 PM:0x13eff0010 0
+;partialBufNum Num of Frame Buffer[ 2 ~ 4 ]
+MWriteS32 PM:0x13eff0014 4
+;rotAngle degrees(0, 90, 180, 270)
+MWriteS32 PM:0x13eff0018 0x5A
+;mirDir mirror direction(0-no mirror, 1-vertical, 2-horizontal, 3-both)
+MWriteS32 PM:0x13eff001c 0
+;outNum Number of Images that you want to decode(0: decode continue, -1: loop)
+MWriteS32 PM:0x13eff0020 1
+;picWidth(encoder) roiEnable(decoder)
+MWriteS32 PM:0x13eff0024 0
+;picHeight(encoder) roiWidth(decoder)
+MWriteS32 PM:0x13eff0028 0
+;roiHeight(decoder)
+MWriteS32 PM:0x13eff002c 0
+;roiOffsetX(decoder)
+MWriteS32 PM:0x13eff0030 0
+;roiOffsetY(decoder)
+MWriteS32 PM:0x13eff0034 0
+;jpeg stream size(decoder)
+MWriteS32 PM:0x13eff0038 0xF368
+MWriteS32 PM:0x13eff1000 0xffffffff
+
+LoadBinary F:\jinf\picture\jpeg422jfif_512x512.jpg 0x120600000
+LoadBinary F:\jinf\picture\jpeg422jfif_512x512_g_1.yuv 0x150000000
+
+LoadImage &app_elf
+gotostart
+DELeteBreak
+SetBREAK test_jpeg_exit %HW
+go
+
+wait !isrun()
+LCOAL &decret
+&decret=MREAD("S16", pm:0x13eff1000)
+IF &decret!=0x00000001
+(
+	FileWrite 23 "CASE 9.2 testing passed!"
+    print "CASE 9.2 testing passed!"
+)
+ELSE
+(
+	FileWrite 23 "CASE 9.2 testing failed"
+    print "CASE 9.2 testing failed"
+)
+FileWrite 23 ""
+
+; CASE 9.3
+print "CASE 9.3: Verify picture decoder with rotate"
+FileWrite 23 "##   CASE 9.3: Verify picture decoder with rotate"
+
+;test_opt 1 decoder 2 encoder
+MWriteS32 PM:0x13eff0000 1
+;comparatorFlag
+MWriteS32 PM:0x13eff0004 1
+
+;packedFormat Packed stream format output [0](PLANAR) [1](YUYV) [2](UYVY) [3](YVYU) [4](VYUY) [5](YUV_444 PACKED)
+MWriteS32 PM:0x13eff0008 0
+;chromaInterleave
+MWriteS32 PM:0x13eff000c 0
+;usePartialMode 0 disable 1 enable
+MWriteS32 PM:0x13eff0010 0
+;partialBufNum Num of Frame Buffer[ 2 ~ 4 ]
+MWriteS32 PM:0x13eff0014 4
+;rotAngle degrees(0, 90, 180, 270)
+MWriteS32 PM:0x13eff0018 0x5A
+;mirDir mirror direction(0-no mirror, 1-vertical, 2-horizontal, 3-both)
+MWriteS32 PM:0x13eff001c 0
+;outNum Number of Images that you want to decode(0: decode continue, -1: loop)
+MWriteS32 PM:0x13eff0020 1
+;picWidth(encoder) roiEnable(decoder)
+MWriteS32 PM:0x13eff0024 0
+;picHeight(encoder) roiWidth(decoder)
+MWriteS32 PM:0x13eff0028 0
+;roiHeight(decoder)
+MWriteS32 PM:0x13eff002c 0
+;roiOffsetX(decoder)
+MWriteS32 PM:0x13eff0030 0
+;roiOffsetY(decoder)
+MWriteS32 PM:0x13eff0034 0
+;jpeg stream size(decoder)
+MWriteS32 PM:0x13eff0038 0x18E18
+MWriteS32 PM:0x13eff1000 0xffffffff
+
+LoadBinary F:\jinf\picture\1_yuv444_512x512.jpg  0x120600000
+LoadBinary F:\jinf\picture\1_yuv444_512x512_g_1.yuv 0x150000000
+
+LoadImage &app_elf
+gotostart
+DELeteBreak
+SetBREAK test_jpeg_exit %HW
+go
+
+wait !isrun()
+LCOAL &decret
+&decret=MREAD("S16", pm:0x13eff1000)
+IF &decret!=0x00000001
+(
+	FileWrite 23 "CASE 9.3 testing passed!"
+    print "CASE 9.3 testing passed!"
+)
+ELSE
+(
+	FileWrite 23 "CASE 9.3 testing failed"
+    print "CASE 9.3 testing failed"
+)
+FileWrite 23 ""
+
+; CASE 10.1
+print "CASE 10.1: Verify picture encoder with rotate"
+FileWrite 23 "##   CASE 10.1: Verify picture encoder with rotate"
+;test_opt 1 decoder 2 encoder
+MWriteS32 PM:0x13eff0000 2
+;comparatorFlag
+MWriteS32 PM:0x13eff0004 1
+
+;packedFormat Packed stream format output [0](PLANAR) [1](YUYV) [2](UYVY) [3](YVYU) [4](VYUY) [5](YUV_444 PACKED)
+MWriteS32 PM:0x13eff0008 0
+;chromaInterleave
+MWriteS32 PM:0x13eff000c 0
+;usePartialMode 0 disable 1 enable
+MWriteS32 PM:0x13eff0010 0
+;partialBufNum Num of Frame Buffer[ 2 ~ 4 ]
+MWriteS32 PM:0x13eff0014 4
+;rotAngle degrees(0, 90, 180, 270)
+MWriteS32 PM:0x13eff0018 0x5A  ; 90   ; 
+;mirDir mirror direction(0-no mirror, 1-vertical, 2-horizontal, 3-both)
+MWriteS32 PM:0x13eff001c 0
+;outNum Number of Images that you want to decode(0: decode continue, -1: loop)
+MWriteS32 PM:0x13eff0020 1
+;picWidth(encoder) roiEnable(decoder)
+MWriteS32 PM:0x13eff0024 0x200
+;picHeight(encoder) roiWidth(decoder)
+MWriteS32 PM:0x13eff0028 0x200
+;roiHeight(decoder) mjpgChromaFormat(encoder Source Chroma Format 0 (4:2:0) / 1 (4:2:2) / 2 (2:2:4 4:2:2 rotated) / 3 (4:4:4) / 4 (4:0:0)) 
+MWriteS32 PM:0x13eff002c 0
+;roiOffsetX(decoder)
+MWriteS32 PM:0x13eff0030 0
+;roiOffsetY(decoder)
+MWriteS32 PM:0x13eff0034 0
+;jpeg stream size(decoder)
+MWriteS32 PM:0x13eff0038 40681
+
+LoadBinary F:\jinf\picture\2_yuv420_512X512.yuv 0x123600000
+LoadBinary F:\jinf\picture\420_512X512_g_1_enc.jpg 0x154000000
+LoadImage &app_elf
+
+gotostart
+DELeteBreak
+SetBREAK test_jpeg_exit %HW
+go
+
+wait !isrun()
+LCOAL &decret
+&decret=MREAD("S16", pm:0x13eff1000)
+IF &decret!=0x00000001
+(
+	FileWrite 23 "CASE 10.1 testing passed!"
+    print "CASE 10.1 testing passed!"
+)
+ELSE
+(
+	FileWrite 23 "CASE 10.1 testing failed"
+    print "CASE 10.1 testing failed"
+)
+FileWrite 23 ""
+
+; CASE 10.2
+print "CASE 10.2: Verify picture encoder with rotate"
+FileWrite 23 "##   CASE 10.2: Verify picture encoder with rotate"
+;test_opt 1 decoder 2 encoder
+MWriteS32 PM:0x13eff0000 2
+;comparatorFlag
+MWriteS32 PM:0x13eff0004 1
+
+;packedFormat Packed stream format output [0](PLANAR) [1](YUYV) [2](UYVY) [3](YVYU) [4](VYUY) [5](YUV_444 PACKED)
+MWriteS32 PM:0x13eff0008 0
+;chromaInterleave
+MWriteS32 PM:0x13eff000c 0
+;usePartialMode 0 disable 1 enable
+MWriteS32 PM:0x13eff0010 0
+;partialBufNum Num of Frame Buffer[ 2 ~ 4 ]
+MWriteS32 PM:0x13eff0014 4
+;rotAngle degrees(0, 90, 180, 270)
+MWriteS32 PM:0x13eff0018 0x5A ; 90   ; 
+;mirDir mirror direction(0-no mirror, 1-vertical, 2-horizontal, 3-both)
+MWriteS32 PM:0x13eff001c 0
+;outNum Number of Images that you want to decode(0: decode continue, -1: loop)
+MWriteS32 PM:0x13eff0020 1
+;picWidth(encoder) roiEnable(decoder)
+MWriteS32 PM:0x13eff0024 0x200
+;picHeight(encoder) roiWidth(decoder)
+MWriteS32 PM:0x13eff0028 0x200
+;roiHeight(decoder) mjpgChromaFormat(encoder Source Chroma Format 0 (4:2:0) / 1 (4:2:2) / 2 (2:2:4 4:2:2 rotated) / 3 (4:4:4) / 4 (4:0:0)) 
+MWriteS32 PM:0x13eff002c 1
+;roiOffsetX(decoder)
+MWriteS32 PM:0x13eff0030 0
+;roiOffsetY(decoder)
+MWriteS32 PM:0x13eff0034 0
+;jpeg stream size(decoder)
+MWriteS32 PM:0x13eff0038 40681
+
+LoadBinary F:\jinf\picture\jpeg422jfif_512X512.yuv 0x123600000
+LoadBinary F:\jinf\picture\422_512X512_g_1_enc.jpg 0x154000000
+LoadImage &app_elf
+
+gotostart
+DELeteBreak
+SetBREAK test_jpeg_exit %HW
+go
+
+wait !isrun()
+LCOAL &decret
+&decret=MREAD("S16", pm:0x13eff1000)
+IF &decret!=0x00000001
+(
+	FileWrite 23 "CASE 10.2 testing passed!"
+    print "CASE 10.2 testing passed!"
+)
+ELSE
+(
+	FileWrite 23 "CASE 10.2 testing failed"
+    print "CASE 10.2 testing failed"
+)
+FileWrite 23 ""
+
+; CASE 10.3
+print "CASE 10.3: Verify picture encoder with rotate"
+FileWrite 23 "##   CASE 10.3: Verify picture encoder with rotate"
+;test_opt 1 decoder 2 encoder
+MWriteS32 PM:0x13eff0000 2
+;comparatorFlag
+MWriteS32 PM:0x13eff0004 1
+
+;packedFormat Packed stream format output [0](PLANAR) [1](YUYV) [2](UYVY) [3](YVYU) [4](VYUY) [5](YUV_444 PACKED)
+MWriteS32 PM:0x13eff0008 0
+;chromaInterleave
+MWriteS32 PM:0x13eff000c 0
+;usePartialMode 0 disable 1 enable
+MWriteS32 PM:0x13eff0010 0
+;partialBufNum Num of Frame Buffer[ 2 ~ 4 ]
+MWriteS32 PM:0x13eff0014 4
+;rotAngle degrees(0, 90, 180, 270)
+MWriteS32 PM:0x13eff0018 0x5A  ; 90   ; 
+;mirDir mirror direction(0-no mirror, 1-vertical, 2-horizontal, 3-both)
+MWriteS32 PM:0x13eff001c 0
+;outNum Number of Images that you want to decode(0: decode continue, -1: loop)
+MWriteS32 PM:0x13eff0020 1
+;picWidth(encoder) roiEnable(decoder)
+MWriteS32 PM:0x13eff0024 0x200
+;picHeight(encoder) roiWidth(decoder)
+MWriteS32 PM:0x13eff0028 0x200
+;roiHeight(decoder) mjpgChromaFormat(encoder Source Chroma Format 0 (4:2:0) / 1 (4:2:2) / 2 (2:2:4 4:2:2 rotated) / 3 (4:4:4) / 4 (4:0:0)) 
+MWriteS32 PM:0x13eff002c 3
+;roiOffsetX(decoder)
+MWriteS32 PM:0x13eff0030 0
+;roiOffsetY(decoder)
+MWriteS32 PM:0x13eff0034 0
+;jpeg stream size(decoder)
+MWriteS32 PM:0x13eff0038 40681
+
+LoadBinary F:\jinf\picture\1_yuv444_512X512.yuv 0x123600000
+LoadBinary F:\jinf\picture\444_512X512_g_1_enc.jpg 0x154000000
+LoadImage &app_elf
+
+gotostart
+DELeteBreak
+SetBREAK test_jpeg_exit %HW
+go
+
+wait !isrun()
+LCOAL &decret
+&decret=MREAD("S16", pm:0x13eff1000)
+IF &decret!=0x00000001
+(
+	FileWrite 23 "CASE 10.3 testing passed!"
+    print "CASE 10.3 testing passed!"
+)
+ELSE
+(
+	FileWrite 23 "CASE 10.3 testing failed"
+    print "CASE 10.3 testing failed"
+)
+FileWrite 23 ""
+
+
+; CASE 11.1
+print "CASE 11.1: Verify picture decoder with mirror"
+FileWrite 23 "##   CASE 11.1: Verify picture decoder with mirror"
+;test_opt 1 decoder 2 encoder
+MWriteS32 PM:0x13eff0000 1
+;comparatorFlag
+MWriteS32 PM:0x13eff0004 1
+
+;packedFormat Packed stream format output [0](PLANAR) [1](YUYV) [2](UYVY) [3](YVYU) [4](VYUY) [5](YUV_444 PACKED)
+MWriteS32 PM:0x13eff0008 0
+;chromaInterleave
+MWriteS32 PM:0x13eff000c 0
+;usePartialMode 0 disable 1 enable
+MWriteS32 PM:0x13eff0010 0
+;partialBufNum Num of Frame Buffer[ 2 ~ 4 ]
+MWriteS32 PM:0x13eff0014 4
+;rotAngle degrees(0, 90, 180, 270)
+MWriteS32 PM:0x13eff0018 0
+;mirDir mirror direction(0-no mirror, 1-vertical, 2-horizontal, 3-both)
+MWriteS32 PM:0x13eff001c 1
+;outNum Number of Images that you want to decode(0: decode continue, -1: loop)
+MWriteS32 PM:0x13eff0020 1
+;picWidth(encoder) roiEnable(decoder)
+MWriteS32 PM:0x13eff0024 0
+;picHeight(encoder) roiWidth(decoder)
+MWriteS32 PM:0x13eff0028 0
+;roiHeight(decoder)
+MWriteS32 PM:0x13eff002c 0
+;roiOffsetX(decoder)
+MWriteS32 PM:0x13eff0030 0
+;roiOffsetY(decoder)
+MWriteS32 PM:0x13eff0034 0
+;jpeg stream size(decoder)
+MWriteS32 PM:0x13eff0038 0x85D8
+MWriteS32 PM:0x13eff1000 0xffffffff
+
+LoadBinary F:\jinf\picture\2_yuv420_512x512.jpg 0x120600000
+LoadBinary F:\jinf\picture\2_yuv420_512x512_m_1.yuv 0x150000000
+
+LoadImage &app_elf
+gotostart
+DELeteBreak
+SetBREAK test_jpeg_exit %HW
+go
+
+wait !isrun()
+LCOAL &decret
+&decret=MREAD("S16", pm:0x13eff1000)
+IF &decret!=0x00000001
+(
+	FileWrite 23 "CASE 11.1 testing passed!"
+    print "CASE 11.1 testing passed!"
+)
+ELSE
+(
+	FileWrite 23 "CASE 11.1 testing failed"
+    print "CASE 11.1 testing failed"
+)
+FileWrite 23 ""
+
+
+; CASE 11.2
+print "CASE 11.2: Verify picture decoder with mirror"
+FileWrite 23 "##   CASE 11.2: Verify picture decoder with mirror"
+;test_opt 1 decoder 2 encoder
+MWriteS32 PM:0x13eff0000 1
+;comparatorFlag
+MWriteS32 PM:0x13eff0004 1
+
+;packedFormat Packed stream format output [0](PLANAR) [1](YUYV) [2](UYVY) [3](YVYU) [4](VYUY) [5](YUV_444 PACKED)
+MWriteS32 PM:0x13eff0008 0
+;chromaInterleave
+MWriteS32 PM:0x13eff000c 0
+;usePartialMode 0 disable 1 enable
+MWriteS32 PM:0x13eff0010 0
+;partialBufNum Num of Frame Buffer[ 2 ~ 4 ]
+MWriteS32 PM:0x13eff0014 4
+;rotAngle degrees(0, 90, 180, 270)
+MWriteS32 PM:0x13eff0018 0
+;mirDir mirror direction(0-no mirror, 1-vertical, 2-horizontal, 3-both)
+MWriteS32 PM:0x13eff001c 1
+;outNum Number of Images that you want to decode(0: decode continue, -1: loop)
+MWriteS32 PM:0x13eff0020 1
+;picWidth(encoder) roiEnable(decoder)
+MWriteS32 PM:0x13eff0024 0
+;picHeight(encoder) roiWidth(decoder)
+MWriteS32 PM:0x13eff0028 0
+;roiHeight(decoder)
+MWriteS32 PM:0x13eff002c 0
+;roiOffsetX(decoder)
+MWriteS32 PM:0x13eff0030 0
+;roiOffsetY(decoder)
+MWriteS32 PM:0x13eff0034 0
+;jpeg stream size(decoder)
+MWriteS32 PM:0x13eff0038 0xF368
+MWriteS32 PM:0x13eff1000 0xffffffff
+
+LoadBinary F:\jinf\picture\jpeg422jfif_512x512.jpg 0x120600000
+LoadBinary F:\jinf\picture\jpeg422jfif_512x512_m_1.yuv 0x150000000
+
+LoadImage &app_elf
+gotostart
+DELeteBreak
+SetBREAK test_jpeg_exit %HW
+go
+
+wait !isrun()
+LCOAL &decret
+&decret=MREAD("S16", pm:0x13eff1000)
+IF &decret!=0x00000001
+(
+	FileWrite 23 "CASE 11.2 testing passed!"
+    print "CASE 11.2 testing passed!"
+)
+ELSE
+(
+	FileWrite 23 "CASE 11.2 testing failed"
+    print "CASE 11.2 testing failed"
+)
+FileWrite 23 ""
+
+; CASE 11.3
+print "CASE 11.3: Verify picture decoder with mirror"
+FileWrite 23 "##   CASE 11.3: Verify picture decoder with mirror"
+;test_opt 1 decoder 2 encoder
+MWriteS32 PM:0x13eff0000 1
+;comparatorFlag
+MWriteS32 PM:0x13eff0004 1
+
+;packedFormat Packed stream format output [0](PLANAR) [1](YUYV) [2](UYVY) [3](YVYU) [4](VYUY) [5](YUV_444 PACKED)
+MWriteS32 PM:0x13eff0008 0
+;chromaInterleave
+MWriteS32 PM:0x13eff000c 0
+;usePartialMode 0 disable 1 enable
+MWriteS32 PM:0x13eff0010 0
+;partialBufNum Num of Frame Buffer[ 2 ~ 4 ]
+MWriteS32 PM:0x13eff0014 4
+;rotAngle degrees(0, 90, 180, 270)
+MWriteS32 PM:0x13eff0018 0
+;mirDir mirror direction(0-no mirror, 1-vertical, 2-horizontal, 3-both)
+MWriteS32 PM:0x13eff001c 1
+;outNum Number of Images that you want to decode(0: decode continue, -1: loop)
+MWriteS32 PM:0x13eff0020 1
+;picWidth(encoder) roiEnable(decoder)
+MWriteS32 PM:0x13eff0024 0
+;picHeight(encoder) roiWidth(decoder)
+MWriteS32 PM:0x13eff0028 0
+;roiHeight(decoder)
+MWriteS32 PM:0x13eff002c 0
+;roiOffsetX(decoder)
+MWriteS32 PM:0x13eff0030 0
+;roiOffsetY(decoder)
+MWriteS32 PM:0x13eff0034 0
+;jpeg stream size(decoder)
+MWriteS32 PM:0x13eff0038 0x18E18
+MWriteS32 PM:0x13eff1000 0xffffffff
+
+LoadBinary F:\jinf\picture\1_yuv444_512x512.jpg 0x120600000
+LoadBinary F:\jinf\picture\1_yuv444_512x512_m_1.yuv 0x150000000
+
+LoadImage &app_elf
+gotostart
+DELeteBreak
+SetBREAK test_jpeg_exit %HW
+go
+
+wait !isrun()
+LCOAL &decret
+&decret=MREAD("S16", pm:0x13eff1000)
+IF &decret!=0x00000001
+(
+	FileWrite 23 "CASE 11.3 testing passed!"
+    print "CASE 11.3 testing passed!"
+)
+ELSE
+(
+	FileWrite 23 "CASE 11.3 testing failed"
+    print "CASE 11.3 testing failed"
+)
+FileWrite 23 ""
+
+
+
+; CASE 12.1
+print "CASE 12.1: Verify picture encoder with mirror"
+FileWrite 23 "##   CASE 12.1: Verify picture encoder with mirror"
+;test_opt 1 decoder 2 encoder
+MWriteS32 PM:0x13eff0000 2
+;comparatorFlag
+MWriteS32 PM:0x13eff0004 1
+
+;packedFormat Packed stream format output [0](PLANAR) [1](YUYV) [2](UYVY) [3](YVYU) [4](VYUY) [5](YUV_444 PACKED)
+MWriteS32 PM:0x13eff0008 0
+;chromaInterleave
+MWriteS32 PM:0x13eff000c 0
+;usePartialMode 0 disable 1 enable
+MWriteS32 PM:0x13eff0010 0
+;partialBufNum Num of Frame Buffer[ 2 ~ 4 ]
+MWriteS32 PM:0x13eff0014 4
+;rotAngle degrees(0, 90, 180, 270)
+MWriteS32 PM:0x13eff0018 0
+;mirDir mirror direction(0-no mirror, 1-vertical, 2-horizontal, 3-both)
+MWriteS32 PM:0x13eff001c 1
+;outNum Number of Images that you want to decode(0: decode continue, -1: loop)
+MWriteS32 PM:0x13eff0020 1
+;picWidth(encoder) roiEnable(decoder)
+MWriteS32 PM:0x13eff0024 0x200
+;picHeight(encoder) roiWidth(decoder)
+MWriteS32 PM:0x13eff0028 0x200
+;roiHeight(decoder) mjpgChromaFormat(encoder Source Chroma Format 0 (4:2:0) / 1 (4:2:2) / 2 (2:2:4 4:2:2 rotated) / 3 (4:4:4) / 4 (4:0:0)) 
+MWriteS32 PM:0x13eff002c 0
+;roiOffsetX(decoder)
+MWriteS32 PM:0x13eff0030 0
+;roiOffsetY(decoder)
+MWriteS32 PM:0x13eff0034 0
+;jpeg stream size(decoder)
+MWriteS32 PM:0x13eff0038 40681
+
+LoadBinary F:\jinf\picture\2_yuv420_512x512.yuv 0x123600000
+LoadBinary F:\jinf\picture\2_yuv420_512x512_enc_m_1.jpg 0x154000000
+LoadImage &app_elf
+
+gotostart
+DELeteBreak
+SetBREAK test_jpeg_exit %HW
+go
+
+wait !isrun()
+LCOAL &decret
+&decret=MREAD("S16", pm:0x13eff1000)
+IF &decret!=0x00000001
+(
+	FileWrite 23 "CASE 12.1 testing passed!"
+    print "CASE 12.1 testing passed!"
+)
+ELSE
+(
+	FileWrite 23 "CASE 12.1 testing failed"
+    print "CASE 12.1 testing failed"
+)
+FileWrite 23 ""
+
+
+; CASE 12.2
+print "CASE 12.2: Verify picture encoder with mirror"
+FileWrite 23 "##   CASE 12.2: Verify picture encoder with mirror"
+;test_opt 1 decoder 2 encoder
+MWriteS32 PM:0x13eff0000 2
+;comparatorFlag
+MWriteS32 PM:0x13eff0004 1
+
+;packedFormat Packed stream format output [0](PLANAR) [1](YUYV) [2](UYVY) [3](YVYU) [4](VYUY) [5](YUV_444 PACKED)
+MWriteS32 PM:0x13eff0008 0
+;chromaInterleave
+MWriteS32 PM:0x13eff000c 0
+;usePartialMode 0 disable 1 enable
+MWriteS32 PM:0x13eff0010 0
+;partialBufNum Num of Frame Buffer[ 2 ~ 4 ]
+MWriteS32 PM:0x13eff0014 4
+;rotAngle degrees(0, 90, 180, 270)
+MWriteS32 PM:0x13eff0018 0
+;mirDir mirror direction(0-no mirror, 1-vertical, 2-horizontal, 3-both)
+MWriteS32 PM:0x13eff001c 1
+;outNum Number of Images that you want to decode(0: decode continue, -1: loop)
+MWriteS32 PM:0x13eff0020 1
+;picWidth(encoder) roiEnable(decoder)
+MWriteS32 PM:0x13eff0024 0x200
+;picHeight(encoder) roiWidth(decoder)
+MWriteS32 PM:0x13eff0028 0x200
+;roiHeight(decoder) mjpgChromaFormat(encoder Source Chroma Format 0 (4:2:0) / 1 (4:2:2) / 2 (2:2:4 4:2:2 rotated) / 3 (4:4:4) / 4 (4:0:0)) 
+MWriteS32 PM:0x13eff002c 1
+;roiOffsetX(decoder)
+MWriteS32 PM:0x13eff0030 0
+;roiOffsetY(decoder)
+MWriteS32 PM:0x13eff0034 0
+;jpeg stream size(decoder)
+MWriteS32 PM:0x13eff0038 40681
+
+LoadBinary F:\jinf\picture\jpeg422jfif_512x512.yuv 0x123600000
+LoadBinary F:\jinf\picture\jpeg422jfif_512x512_enc_m_1.jpg 0x154000000
+LoadImage &app_elf
+
+gotostart
+DELeteBreak
+SetBREAK test_jpeg_exit %HW
+go
+
+wait !isrun()
+LCOAL &decret
+&decret=MREAD("S16", pm:0x13eff1000)
+IF &decret!=0x00000001
+(
+	FileWrite 23 "CASE 12.2 testing passed!"
+    print "CASE 12.2 testing passed!"
+)
+ELSE
+(
+	FileWrite 23 "CASE 12.2 testing failed"
+    print "CASE 12.2 testing failed"
+)
+FileWrite 23 ""
+
+
+; CASE 12.3
+print "CASE 12.3: Verify picture encoder with mirror"
+FileWrite 23 "##   CASE 12.3: Verify picture encoder with mirror"
+;test_opt 1 decoder 2 encoder
+MWriteS32 PM:0x13eff0000 2
+;comparatorFlag
+MWriteS32 PM:0x13eff0004 1
+
+;packedFormat Packed stream format output [0](PLANAR) [1](YUYV) [2](UYVY) [3](YVYU) [4](VYUY) [5](YUV_444 PACKED)
+MWriteS32 PM:0x13eff0008 0
+;chromaInterleave
+MWriteS32 PM:0x13eff000c 0
+;usePartialMode 0 disable 1 enable
+MWriteS32 PM:0x13eff0010 0
+;partialBufNum Num of Frame Buffer[ 2 ~ 4 ]
+MWriteS32 PM:0x13eff0014 4
+;rotAngle degrees(0, 90, 180, 270)
+MWriteS32 PM:0x13eff0018 0
+;mirDir mirror direction(0-no mirror, 1-vertical, 2-horizontal, 3-both)
+MWriteS32 PM:0x13eff001c 1
+;outNum Number of Images that you want to decode(0: decode continue, -1: loop)
+MWriteS32 PM:0x13eff0020 1
+;picWidth(encoder) roiEnable(decoder)
+MWriteS32 PM:0x13eff0024 0x200
+;picHeight(encoder) roiWidth(decoder)
+MWriteS32 PM:0x13eff0028 0x200
+;roiHeight(decoder) mjpgChromaFormat(encoder Source Chroma Format 0 (4:2:0) / 1 (4:2:2) / 2 (2:2:4 4:2:2 rotated) / 3 (4:4:4) / 4 (4:0:0)) 
+MWriteS32 PM:0x13eff002c 3
+;roiOffsetX(decoder)
+MWriteS32 PM:0x13eff0030 0
+;roiOffsetY(decoder)
+MWriteS32 PM:0x13eff0034 0
+;jpeg stream size(decoder)
+MWriteS32 PM:0x13eff0038 40681
+
+LoadBinary F:\jinf\picture\1_yuv444_512x512.yuv 0x123600000
+LoadBinary F:\jinf\picture\1_yuv444_512x512_enc_m_1.jpg 0x154000000
+LoadImage &app_elf
+
+gotostart
+DELeteBreak
+SetBREAK test_jpeg_exit %HW
+go
+
+wait !isrun()
+LCOAL &decret
+&decret=MREAD("S16", pm:0x13eff1000)
+IF &decret!=0x00000001
+(
+	FileWrite 23 "CASE 12.3 testing passed!"
+    print "CASE 12.3 testing passed!"
+)
+ELSE
+(
+	FileWrite 23 "CASE 12.3 testing failed"
+    print "CASE 12.3 testing failed"
+)
+FileWrite 23 ""
+
+
+
+;;; + ;;;      ; CASE 13.1
+;;; + ;;;      print "CASE 13.1: Verify picture decoder with ROI"
+;;; + ;;;      FileWrite 23 "##   CASE 13.1: Verify picture decoder with ROI"
+;;; + ;;;      
+;;; + ;;;      ;test_opt 1 decoder 2 encoder
+;;; + ;;;      MWriteS32 PM:0x13eff0000 1
+;;; + ;;;      ;comparatorFlag
+;;; + ;;;      MWriteS32 PM:0x13eff0004 1
+;;; + ;;;      
+;;; + ;;;      ;packedFormat Packed stream format output [0](PLANAR) [1](YUYV) [2](UYVY) [3](YVYU) [4](VYUY) [5](YUV_444 PACKED)
+;;; + ;;;      MWriteS32 PM:0x13eff0008 0
+;;; + ;;;      ;chromaInterleave
+;;; + ;;;      MWriteS32 PM:0x13eff000c 0
+;;; + ;;;      ;usePartialMode 0 disable 1 enable
+;;; + ;;;      MWriteS32 PM:0x13eff0010 0
+;;; + ;;;      ;partialBufNum Num of Frame Buffer[ 2 ~ 4 ]
+;;; + ;;;      MWriteS32 PM:0x13eff0014 4
+;;; + ;;;      ;rotAngle degrees(0, 90, 180, 270)
+;;; + ;;;      MWriteS32 PM:0x13eff0018 0
+;;; + ;;;      ;mirDir mirror direction(0-no mirror, 1-vertical, 2-horizontal, 3-both)
+;;; + ;;;      MWriteS32 PM:0x13eff001c 0
+;;; + ;;;      ;outNum Number of Images that you want to decode(0: decode continue, -1: loop)
+;;; + ;;;      MWriteS32 PM:0x13eff0020 1
+;;; + ;;;      ;picWidth(encoder) roiEnable(decoder)
+;;; + ;;;      MWriteS32 PM:0x13eff0024 1
+;;; + ;;;      ;picHeight(encoder) roiWidth(decoder)
+;;; + ;;;      MWriteS32 PM:0x13eff0028 0x200 ; 512    ; 
+;;; + ;;;      ;roiHeight(decoder)
+;;; + ;;;      MWriteS32 PM:0x13eff002c 0x200 ; 512    ; 
+;;; + ;;;      ;roiOffsetX(decoder)
+;;; + ;;;      MWriteS32 PM:0x13eff0030 0x100 ; 256    ;
+;;; + ;;;      ;roiOffsetY(decoder)
+;;; + ;;;      MWriteS32 PM:0x13eff0034 0x100 ; 256    ;
+;;; + ;;;      ;jpeg stream size(decoder)
+;;; + ;;;      MWriteS32 PM:0x13eff0038 0x23431
+;;; + ;;;      MWriteS32 PM:0x13eff1000 0xffffffff
+;;; + ;;;      
+;;; + ;;;      LoadBinary F:\jinf\picture\2_yuv420.jpg 0x120600000
+;;; + ;;;      LoadBinary F:\jinf\picture\2_yuv420_roi_512x512.yuv 0x150000000
+;;; + ;;;      
+;;; + ;;;      LoadImage &app_elf
+;;; + ;;;      gotostart
+;;; + ;;;      DELeteBreak
+;;; + ;;;      SetBREAK test_jpeg_exit %HW
+;;; + ;;;      go
+;;; + ;;;      
+;;; + ;;;      wait !isrun()
+;;; + ;;;      LCOAL &decret
+;;; + ;;;      &decret=MREAD("S16", pm:0x13eff1000)
+;;; + ;;;      IF &decret!=0x00000001
+;;; + ;;;      (
+;;; + ;;;      	FileWrite 23 "CASE 13.1 testing passed!"
+;;; + ;;;          print "CASE 13.1 testing passed!"
+;;; + ;;;      )
+;;; + ;;;      ELSE
+;;; + ;;;      (
+;;; + ;;;      	FileWrite 23 "CASE 13.1 testing failed"
+;;; + ;;;          print "CASE 13.1 testing failed"
+;;; + ;;;      )
+;;; + ;;;      FileWrite 23 ""
+
+
+; CASE 13.2
+print "CASE 13.2: Verify picture decoder with ROI"
+FileWrite 23 "##   CASE 13.2: Verify picture decoder with ROI"
+
+;test_opt 1 decoder 2 encoder
+MWriteS32 PM:0x13eff0000 1
+;comparatorFlag
+MWriteS32 PM:0x13eff0004 1
+
+;packedFormat Packed stream format output [0](PLANAR) [1](YUYV) [2](UYVY) [3](YVYU) [4](VYUY) [5](YUV_444 PACKED)
+MWriteS32 PM:0x13eff0008 0
+;chromaInterleave
+MWriteS32 PM:0x13eff000c 0
+;usePartialMode 0 disable 1 enable
+MWriteS32 PM:0x13eff0010 0
+;partialBufNum Num of Frame Buffer[ 2 ~ 4 ]
+MWriteS32 PM:0x13eff0014 4
+;rotAngle degrees(0, 90, 180, 270)
+MWriteS32 PM:0x13eff0018 0
+;mirDir mirror direction(0-no mirror, 1-vertical, 2-horizontal, 3-both)
+MWriteS32 PM:0x13eff001c 0
+;outNum Number of Images that you want to decode(0: decode continue, -1: loop)
+MWriteS32 PM:0x13eff0020 1
+;picWidth(encoder) roiEnable(decoder)
+MWriteS32 PM:0x13eff0024 1
+;picHeight(encoder) roiWidth(decoder)
+MWriteS32 PM:0x13eff0028 0x200 ; 
+;roiHeight(decoder)
+MWriteS32 PM:0x13eff002c 0x200 
+;roiOffsetX(decoder)
+MWriteS32 PM:0x13eff0030 0x100
+;roiOffsetY(decoder)
+MWriteS32 PM:0x13eff0034 0x100
+;jpeg stream size(decoder)
+MWriteS32 PM:0x13eff0038 0x17A30A
+MWriteS32 PM:0x13eff1000 0xffffffff
+
+LoadBinary F:\jinf\picture\jpeg422jfif.jpg 0x120600000
+LoadBinary F:\jinf\picture\jpeg422jfif_roi_512x512.yuv 0x150000000
+
+LoadImage &app_elf
+gotostart
+DELeteBreak
+SetBREAK test_jpeg_exit %HW
+go
+
+wait !isrun()
+LCOAL &decret
+&decret=MREAD("S16", pm:0x13eff1000)
+IF &decret!=0x00000001
+(
+	FileWrite 23 "CASE 13.2 testing passed!"
+    print "CASE 13.2 testing passed!"
+)
+ELSE
+(
+	FileWrite 23 "CASE 13.2 testing failed"
+    print "CASE 13.2 testing failed"
+)
+FileWrite 23 ""
+
+
+; CASE 13.3
+print "CASE 13.3: Verify picture decoder with ROI"
+FileWrite 23 "##   CASE 13.3: Verify picture decoder with ROI"
+
+;test_opt 1 decoder 2 encoder
+MWriteS32 PM:0x13eff0000 1
+;comparatorFlag
+MWriteS32 PM:0x13eff0004 1
+
+;packedFormat Packed stream format output [0](PLANAR) [1](YUYV) [2](UYVY) [3](YVYU) [4](VYUY) [5](YUV_444 PACKED)
+MWriteS32 PM:0x13eff0008 0
+;chromaInterleave
+MWriteS32 PM:0x13eff000c 0
+;usePartialMode 0 disable 1 enable
+MWriteS32 PM:0x13eff0010 0
+;partialBufNum Num of Frame Buffer[ 2 ~ 4 ]
+MWriteS32 PM:0x13eff0014 4
+;rotAngle degrees(0, 90, 180, 270)
+MWriteS32 PM:0x13eff0018 0
+;mirDir mirror direction(0-no mirror, 1-vertical, 2-horizontal, 3-both)
+MWriteS32 PM:0x13eff001c 0
+;outNum Number of Images that you want to decode(0: decode continue, -1: loop)
+MWriteS32 PM:0x13eff0020 1
+;picWidth(encoder) roiEnable(decoder)
+MWriteS32 PM:0x13eff0024 1
+;picHeight(encoder) roiWidth(decoder)
+MWriteS32 PM:0x13eff0028 0x200 ; 
+;roiHeight(decoder)
+MWriteS32 PM:0x13eff002c 0x200 
+;roiOffsetX(decoder)
+MWriteS32 PM:0x13eff0030 0x100
+;roiOffsetY(decoder)
+MWriteS32 PM:0x13eff0034 0x100
+;jpeg stream size(decoder)
+MWriteS32 PM:0x13eff0038 0x27C935
+MWriteS32 PM:0x13eff1000 0xffffffff
+
+LoadBinary F:\jinf\picture\1_yuv444.jpg  0x120600000
+LoadBinary F:\jinf\picture\1_yuv444_roi_512x512.yuv 0x150000000
+
+LoadImage &app_elf
+gotostart
+DELeteBreak
+SetBREAK test_jpeg_exit %HW
+go
+
+wait !isrun()
+LCOAL &decret
+&decret=MREAD("S16", pm:0x13eff1000)
+IF &decret!=0x00000001
+(
+	FileWrite 23 "CASE 13.3 testing passed!"
+    print "CASE 13.3 testing passed!"
+)
+ELSE
+(
+	FileWrite 23 "CASE 13.3 testing failed"
+    print "CASE 13.3 testing failed"
+)
+FileWrite 23 ""
+
+
+;;; + ;;; ; CASE 14.1
+;;; + ;;; print "CASE 14.1: Verify picture encoder with ROI"
+;;; + ;;; FileWrite 23 "##   CASE 14.1: Verify picture encoder with ROI"
+;;; + ;;; ;test_opt 1 decoder 2 encoder
+;;; + ;;; MWriteS32 PM:0x13eff0000 2
+;;; + ;;; ;comparatorFlag
+;;; + ;;; MWriteS32 PM:0x13eff0004 1
+;;; + ;;; 
+;;; + ;;; ;packedFormat Packed stream format output [0](PLANAR) [1](YUYV) [2](UYVY) [3](YVYU) [4](VYUY) [5](YUV_444 PACKED)
+;;; + ;;; MWriteS32 PM:0x13eff0008 0
+;;; + ;;; ;chromaInterleave
+;;; + ;;; MWriteS32 PM:0x13eff000c 0
+;;; + ;;; ;usePartialMode 0 disable 1 enable
+;;; + ;;; MWriteS32 PM:0x13eff0010 0
+;;; + ;;; ;partialBufNum Num of Frame Buffer[ 2 ~ 4 ]
+;;; + ;;; MWriteS32 PM:0x13eff0014 4
+;;; + ;;; ;rotAngle degrees(0, 90, 180, 270)
+;;; + ;;; MWriteS32 PM:0x13eff0018 0
+;;; + ;;; ;mirDir mirror direction(0-no mirror, 1-vertical, 2-horizontal, 3-both)
+;;; + ;;; MWriteS32 PM:0x13eff001c 0
+;;; + ;;; ;outNum Number of Images that you want to decode(0: decode continue, -1: loop)
+;;; + ;;; MWriteS32 PM:0x13eff0020 1
+;;; + ;;; ;picWidth(encoder) roiEnable(decoder)
+;;; + ;;; MWriteS32 PM:0x13eff0024 0x500 ; 1280  ; 
+;;; + ;;; ;picHeight(encoder) roiWidth(decoder)
+;;; + ;;; MWriteS32 PM:0x13eff0028 0x400 ; 1024   ; 
+;;; + ;;; ;roiHeight(decoder) mjpgChromaFormat(encoder Source Chroma Format 0 (4:2:0) / 1 (4:2:2) / 2 (2:2:4 4:2:2 rotated) / 3 (4:4:4) / 4 (4:0:0)) 
+;;; + ;;; MWriteS32 PM:0x13eff002c 0
+;;; + ;;; ;roiOffsetX(decoder)
+;;; + ;;; MWriteS32 PM:0x13eff0030 0
+;;; + ;;; ;roiOffsetY(decoder)
+;;; + ;;; MWriteS32 PM:0x13eff0034 0
+;;; + ;;; ;jpeg stream size(decoder)
+;;; + ;;; MWriteS32 PM:0x13eff0038 40681
+;;; + ;;; 
+;;; + ;;; LoadBinary F:\jinf\picture\2_yuv420.yuv 0x123600000
+;;; + ;;; LoadBinary F:\jinf\picture\2_yuv420_enc.jpg 0x154000000
+;;; + ;;; LoadImage &app_elf
+;;; + ;;; 
+;;; + ;;; gotostart
+;;; + ;;; DELeteBreak
+;;; + ;;; SetBREAK test_jpeg_exit %HW
+;;; + ;;; go
+;;; + ;;; 
+;;; + ;;; wait !isrun()
+;;; + ;;; LCOAL &decret
+;;; + ;;; &decret=MREAD("S16", pm:0x13eff1000)
+;;; + ;;; IF &decret!=0x00000001
+;;; + ;;; (
+;;; + ;;; 	FileWrite 23 "CASE 14.1 testing passed!"
+;;; + ;;;     print "CASE 14.1 testing passed!"
+;;; + ;;; )
+;;; + ;;; ELSE
+;;; + ;;; (
+;;; + ;;; 	FileWrite 23 "CASE 14.1 testing failed"
+;;; + ;;;     print "CASE 14.1 testing failed"
+;;; + ;;; )
+;;; + ;;; FileWrite 23 ""
+
+; CASE 15
+print "CASE 15: Verify picture decoder with partial"
+FileWrite 23 "##   CASE 15: Verify picture decoder with partial"
+;test_opt 1 decoder 2 encoder
+MWriteS32 PM:0x13eff0000 1
+;comparatorFlag
+MWriteS32 PM:0x13eff0004 1
+
+;packedFormat Packed stream format output [0](PLANAR) [1](YUYV) [2](UYVY) [3](YVYU) [4](VYUY) [5](YUV_444 PACKED)
+MWriteS32 PM:0x13eff0008 0
+;chromaInterleave
+MWriteS32 PM:0x13eff000c 0
+;usePartialMode 0 disable 1 enable
+MWriteS32 PM:0x13eff0010 1
+;partialBufNum Num of Frame Buffer[ 2 ~ 4 ]
+MWriteS32 PM:0x13eff0014 4
+;rotAngle degrees(0, 90, 180, 270)
+MWriteS32 PM:0x13eff0018 0
+;mirDir mirror direction(0-no mirror, 1-vertical, 2-horizontal, 3-both)
+MWriteS32 PM:0x13eff001c 0
+;outNum Number of Images that you want to decode(0: decode continue, -1: loop)
+MWriteS32 PM:0x13eff0020 1
+;picWidth(encoder) roiEnable(decoder)
+MWriteS32 PM:0x13eff0024 0
+;picHeight(encoder) roiWidth(decoder)
+MWriteS32 PM:0x13eff0028 0
+;roiHeight(decoder)
+MWriteS32 PM:0x13eff002c 0
+;roiOffsetX(decoder)
+MWriteS32 PM:0x13eff0030 0
+;roiOffsetY(decoder)
+MWriteS32 PM:0x13eff0034 0
+;jpeg stream size(decoder)
+MWriteS32 PM:0x13eff0038 0x85D8
+MWriteS32 PM:0x13eff1000 0xffffffff
+
+LoadBinary F:\jinf\picture\3_yuv420_512x512.jpg 0x120600000
+LoadBinary F:\jinf\picture\3_yuv420_par_512x512.yuv 0x150000000
+
+LoadImage &app_elf
+gotostart
+DELeteBreak
+SetBREAK test_jpeg_exit %HW
+go
+
+wait !isrun()
+LCOAL &decret
+&decret=MREAD("S16", pm:0x13eff1000)
+IF &decret!=0x00000001
+(
+	FileWrite 23 "CASE 15 testing passed!"
+    print "CASE 15 testing passed!"
+)
+ELSE
+(
+	FileWrite 23 "CASE 15 testing failed"
+    print "CASE 15 testing failed"
+)
+FileWrite 23 ""
+
+; CASE 16
+print "CASE 16: Verify picture encoder with partial"
+FileWrite 23 "##   CASE 16: Verify picture encoder with partial"
+;test_opt 1 decoder 2 encoder
+MWriteS32 PM:0x13eff0000 2
+;comparatorFlag
+MWriteS32 PM:0x13eff0004 1
+
+;packedFormat Packed stream format output [0](PLANAR) [1](YUYV) [2](UYVY) [3](YVYU) [4](VYUY) [5](YUV_444 PACKED)
+MWriteS32 PM:0x13eff0008 0
+;chromaInterleave
+MWriteS32 PM:0x13eff000c 0
+;usePartialMode 0 disable 1 enable
+MWriteS32 PM:0x13eff0010 1
+;partialBufNum Num of Frame Buffer[ 2 ~ 4 ]
+MWriteS32 PM:0x13eff0014 4
+;rotAngle degrees(0, 90, 180, 270)
+MWriteS32 PM:0x13eff0018 0
+;mirDir mirror direction(0-no mirror, 1-vertical, 2-horizontal, 3-both)
+MWriteS32 PM:0x13eff001c 0
+;outNum Number of Images that you want to decode(0: decode continue, -1: loop)
+MWriteS32 PM:0x13eff0020 1
+;picWidth(encoder) roiEnable(decoder)
+MWriteS32 PM:0x13eff0024 0x200
+;picHeight(encoder) roiWidth(decoder)
+MWriteS32 PM:0x13eff0028 0x200
+;roiHeight(decoder) mjpgChromaFormat(encoder Source Chroma Format 0 (4:2:0) / 1 (4:2:2) / 2 (2:2:4 4:2:2 rotated) / 3 (4:4:4) / 4 (4:0:0)) 
+MWriteS32 PM:0x13eff002c 0
+;roiOffsetX(decoder)
+MWriteS32 PM:0x13eff0030 0
+;roiOffsetY(decoder)
+MWriteS32 PM:0x13eff0034 0
+;jpeg stream size(decoder)
+MWriteS32 PM:0x13eff0038 40681
+
+LoadBinary F:\jinf\picture\3_yuv420_par_512x512.yuv 0x123600000
+LoadBinary F:\jinf\picture\3_yuv420_par_512x512_enc.jpg 0x154000000
+LoadImage &app_elf
+
+gotostart
+DELeteBreak
+SetBREAK test_jpeg_exit %HW
+go
+
+wait !isrun()
+LCOAL &decret
+&decret=MREAD("S16", pm:0x13eff1000)
+IF &decret!=0x00000001
+(
+	FileWrite 23 "CASE 16 testing passed!"
+    print "CASE 16 testing passed!"
+)
+ELSE
+(
+	FileWrite 23 "CASE 16 testing failed"
+    print "CASE 16 testing failed"
+)
+FileWrite 23 ""
+
+; CASE 17
+print "CASE 17: Verify YUV422 pack decoder"
+FileWrite 23 "##   CASE 17: Verify YUV422 pack decoder"
+
+;test_opt 1 decoder 2 encoder
+MWriteS32 PM:0x13eff0000 1
+;comparatorFlag
+MWriteS32 PM:0x13eff0004 1
+
+;packedFormat Packed stream format output [0](PLANAR) [1](YUYV) [2](UYVY) [3](YVYU) [4](VYUY) [5](YUV_444 PACKED)
+MWriteS32 PM:0x13eff0008 1
+;chromaInterleave
+MWriteS32 PM:0x13eff000c 0
+;usePartialMode 0 disable 1 enable
+MWriteS32 PM:0x13eff0010 0
+;partialBufNum Num of Frame Buffer[ 2 ~ 4 ]
+MWriteS32 PM:0x13eff0014 4
+;rotAngle degrees(0, 90, 180, 270)
+MWriteS32 PM:0x13eff0018 0
+;mirDir mirror direction(0-no mirror, 1-vertical, 2-horizontal, 3-both)
+MWriteS32 PM:0x13eff001c 0
+;outNum Number of Images that you want to decode(0: decode continue, -1: loop)
+MWriteS32 PM:0x13eff0020 1
+;picWidth(encoder) roiEnable(decoder)
+MWriteS32 PM:0x13eff0024 0
+;picHeight(encoder) roiWidth(decoder)
+MWriteS32 PM:0x13eff0028 0
+;roiHeight(decoder)
+MWriteS32 PM:0x13eff002c 0
+;roiOffsetX(decoder)
+MWriteS32 PM:0x13eff0030 0
+;roiOffsetY(decoder)
+MWriteS32 PM:0x13eff0034 0
+;jpeg stream size(decoder)
+MWriteS32 PM:0x13eff0038 0xF368
+MWriteS32 PM:0x13eff1000 0xffffffff
+
+LoadBinary F:\jinf\picture\jpeg422jfif_512x512.jpg 0x120600000
+LoadBinary F:\jinf\picture\jpeg422jfif_512x512_pk_3.yuv 0x150000000
+
+LoadImage &app_elf   %include %gnu %trim 8. %path "U:\MyWorks\Bitmain\BM1682\u-boot\examples\bmtest\bm1682\test\jpeg"
+gotostart
+DELeteBreak
+;; SetBREAK comparateYuv  %HW
+SetBREAK test_jpeg_exit %HW 
+go
+
+wait !isrun()
+LCOAL &decret
+&decret=MREAD("S16", pm:0x13eff1000)
+IF &decret!=0x00000001
+(
+	FileWrite 23 "CASE 17 testing passed!"
+    print "CASE 17 testing passed!"
+)
+ELSE
+(
+	FileWrite 23 "CASE 17 testing failed"
+    print "CASE 17 testing failed"
+)
+FileWrite 23 ""
+
+; CASE 18
+print "CASE 18: Verify YUV422 pack encoder"
+FileWrite 23 "##   CASE 18: Verify YUV422 pack encoder"
+;test_opt 1 decoder 2 encoder
+MWriteS32 PM:0x13eff0000 2
+;comparatorFlag
+MWriteS32 PM:0x13eff0004 1
+
+;packedFormat Packed stream format output [0](PLANAR) [1](YUYV) [2](UYVY) [3](YVYU) [4](VYUY) [5](YUV_444 PACKED)
+MWriteS32 PM:0x13eff0008 1
+;chromaInterleave
+MWriteS32 PM:0x13eff000c 0
+;usePartialMode 0 disable 1 enable
+MWriteS32 PM:0x13eff0010 0
+;partialBufNum Num of Frame Buffer[ 2 ~ 4 ]
+MWriteS32 PM:0x13eff0014 4
+;rotAngle degrees(0, 90, 180, 270)
+MWriteS32 PM:0x13eff0018 0
+;mirDir mirror direction(0-no mirror, 1-vertical, 2-horizontal, 3-both)
+MWriteS32 PM:0x13eff001c 0
+;outNum Number of Images that you want to decode(0: decode continue, -1: loop)
+MWriteS32 PM:0x13eff0020 1
+;picWidth(encoder) roiEnable(decoder)
+MWriteS32 PM:0x13eff0024 0x200
+;picHeight(encoder) roiWidth(decoder)
+MWriteS32 PM:0x13eff0028 0x200
+;roiHeight(decoder) mjpgChromaFormat(encoder Source Chroma Format 0 (4:2:0) / 1 (4:2:2) / 2 (2:2:4 4:2:2 rotated) / 3 (4:4:4) / 4 (4:0:0)) 
+MWriteS32 PM:0x13eff002c 1
+;roiOffsetX(decoder)
+MWriteS32 PM:0x13eff0030 0
+;roiOffsetY(decoder)
+MWriteS32 PM:0x13eff0034 0
+;jpeg stream size(decoder)
+MWriteS32 PM:0x13eff0038 40681
+
+LoadBinary F:\jinf\picture\jpeg422jfif_512x512_pk_3.yuv 0x123600000
+LoadBinary F:\jinf\picture\422pk3_512x512_enc.jpg 0x154000000
+LoadImage &app_elf
+
+gotostart
+DELeteBreak
+SetBREAK test_jpeg_exit %HW
+go
+
+wait !isrun()
+LCOAL &decret
+&decret=MREAD("S16", pm:0x13eff1000)
+IF &decret!=0x00000001
+(
+	FileWrite 23 "CASE 18 testing passed!"
+    print "CASE 18 testing passed!"
+)
+ELSE
+(
+	FileWrite 23 "CASE 18 testing failed"
+    print "CASE 18 testing failed"
+)
+FileWrite 23 ""
+
+; CASE 19
+print "CASE 19: Verify YUV444 pack decoder"
+FileWrite 23 "##   CASE 19: Verify YUV444 pack decoder"
+
+;test_opt 1 decoder 2 encoder
+MWriteS32 PM:0x13eff0000 1
+;comparatorFlag
+MWriteS32 PM:0x13eff0004 1
+
+;packedFormat Packed stream format output [0](PLANAR) [1](YUYV) [2](UYVY) [3](YVYU) [4](VYUY) [5](YUV_444 PACKED)
+MWriteS32 PM:0x13eff0008 5
+;chromaInterleave
+MWriteS32 PM:0x13eff000c 0
+;usePartialMode 0 disable 1 enable
+MWriteS32 PM:0x13eff0010 0
+;partialBufNum Num of Frame Buffer[ 2 ~ 4 ]
+MWriteS32 PM:0x13eff0014 4
+;rotAngle degrees(0, 90, 180, 270)
+MWriteS32 PM:0x13eff0018 0
+;mirDir mirror direction(0-no mirror, 1-vertical, 2-horizontal, 3-both)
+MWriteS32 PM:0x13eff001c 0
+;outNum Number of Images that you want to decode(0: decode continue, -1: loop)
+MWriteS32 PM:0x13eff0020 1
+;picWidth(encoder) roiEnable(decoder)
+MWriteS32 PM:0x13eff0024 0
+;picHeight(encoder) roiWidth(decoder)
+MWriteS32 PM:0x13eff0028 0
+;roiHeight(decoder)
+MWriteS32 PM:0x13eff002c 0
+;roiOffsetX(decoder)
+MWriteS32 PM:0x13eff0030 0
+;roiOffsetY(decoder)
+MWriteS32 PM:0x13eff0034 0
+;jpeg stream size(decoder)
+MWriteS32 PM:0x13eff0038 0x18E18
+MWriteS32 PM:0x13eff1000 0xffffffff
+
+LoadBinary F:\jinf\picture\1_yuv444_512x512.jpg 0x120600000
+LoadBinary F:\jinf\picture\1_yuv444_512x512_pk_7.yuv 0x150000000
+
+LoadImage &app_elf
+gotostart
+DELeteBreak
+SetBREAK test_jpeg_exit %HW
+go
+
+wait !isrun()
+LCOAL &decret
+&decret=MREAD("S16", pm:0x13eff1000)
+IF &decret!=0x00000001
+(
+	FileWrite 23 "CASE 19 testing passed!"
+    print "CASE 19 testing passed!"
+)
+ELSE
+(
+	FileWrite 23 "CASE 19 testing failed"
+    print "CASE 19 testing failed"
+)
+FileWrite 23 ""
+
+; CASE 20
+print "CASE 20: Verify YUV444 pack encoder"
+FileWrite 23 "##   CASE 20: Verify YUV444 pack encoder"
+;test_opt 1 decoder 2 encoder
+MWriteS32 PM:0x13eff0000 2
+;comparatorFlag
+MWriteS32 PM:0x13eff0004 1
+
+;packedFormat Packed stream format output [0](PLANAR) [1](YUYV) [2](UYVY) [3](YVYU) [4](VYUY) [5](YUV_444 PACKED)
+MWriteS32 PM:0x13eff0008 5
+;chromaInterleave
+MWriteS32 PM:0x13eff000c 0
+;usePartialMode 0 disable 1 enable
+MWriteS32 PM:0x13eff0010 0
+;partialBufNum Num of Frame Buffer[ 2 ~ 4 ]
+MWriteS32 PM:0x13eff0014 4
+;rotAngle degrees(0, 90, 180, 270)
+MWriteS32 PM:0x13eff0018 0
+;mirDir mirror direction(0-no mirror, 1-vertical, 2-horizontal, 3-both)
+MWriteS32 PM:0x13eff001c 0
+;outNum Number of Images that you want to decode(0: decode continue, -1: loop)
+MWriteS32 PM:0x13eff0020 1
+;picWidth(encoder) roiEnable(decoder)
+MWriteS32 PM:0x13eff0024 0x200
+;picHeight(encoder) roiWidth(decoder)
+MWriteS32 PM:0x13eff0028 0x200
+;roiHeight(decoder) mjpgChromaFormat(encoder Source Chroma Format 0 (4:2:0) / 1 (4:2:2) / 2 (2:2:4 4:2:2 rotated) / 3 (4:4:4) / 4 (4:0:0)) 
+MWriteS32 PM:0x13eff002c 3
+;roiOffsetX(decoder)
+MWriteS32 PM:0x13eff0030 0
+;roiOffsetY(decoder)
+MWriteS32 PM:0x13eff0034 0
+;jpeg stream size(decoder)
+MWriteS32 PM:0x13eff0038 40681
+
+LoadBinary F:\jinf\picture\yuv444_512x512_pk_7.yuv 0x123600000
+LoadBinary F:\jinf\picture\444pk7_512x512_enc.jpg 0x154000000
+LoadImage &app_elf
+
+gotostart
+DELeteBreak
+;; SetBREAK EncodeTest %HW
+SetBREAK test_jpeg_exit %HW
+go
+
+wait !isrun()
+LCOAL &decret
+&decret=MREAD("S16", pm:0x13eff1000)
+IF &decret!=0x00000001
+(
+	FileWrite 23 "CASE 20 testing passed!"
+    print "CASE 20 testing passed!"
+)
+ELSE
+(
+	FileWrite 23 "CASE 20 testing failed"
+    print "CASE 20 testing failed"
+)
+FileWrite 23 ""
+
+FILEClose 23 ;close opened file
+print "loading complete..."
+END

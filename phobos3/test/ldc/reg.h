@@ -1,0 +1,34 @@
+#ifndef _CVI_REG_H_
+#define _CVI_REG_H_
+#include <stdbool.h>
+#include <common.h>
+#include "system_common.h"
+#ifdef ENV_CVITEST
+
+
+extern bool dump_reg;
+
+#define _reg_read(addr) readl((uintptr_t)addr)
+#define _reg_write(addr, data) \
+    { \
+	writel((uintptr_t)addr, data); \
+	if (dump_reg) \
+	    uartlog("MWriteS32 %#x %#x\n", (u32)(addr), (u32)(data)); \
+    }
+
+void _reg_write_mask(uintptr_t addr, u32 mask, u32 data);
+
+#elif defined(ENV_EMU)
+u32 _reg_read(uintptr_t addr);
+void _reg_write(uintptr_t addr, u32 data);
+void _reg_write_mask(uintptr_t addr, u32 mask, u32 data);
+
+#else
+#include <linux/io.h>
+typedef uint32_t u32;
+#define _reg_read(addr) readl((void __iomem *)addr)
+#define _reg_write(addr, data) writel(data, (void __iomem *)addr)
+void _reg_write_mask(uintptr_t addr, u32 mask, u32 data);
+#endif
+
+#endif //_CVI_REG_H_

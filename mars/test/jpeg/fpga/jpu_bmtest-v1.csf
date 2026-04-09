@@ -1,0 +1,8 @@
+; CASE 1: Verify YUV420 decoder
+
+LoadBinary Z:\home\arena\projects\commit\u-boot\examples\bmtest\bm1880\test\jpeg\fpga\dec.jpg 0x10C000000
+
+;CASE 2: Verify YUV420 encoder
+
+LoadBinary Z:\home\arena\projects\commit\u-boot\examples\bmtest\bm1880\test\jpeg\fpga\2_yuv420.yuv 0x109000000
+

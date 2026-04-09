@@ -1,0 +1,55 @@
+#
+# NOTE! Don't add files that are generated in specific
+# subdirectories here. Add them in the ".gitignore" file
+# in that subdirectory instead.
+#
+# Normal rules
+#
+.*
+*.o
+*.o.*
+*.a
+*.su
+*.mod.c
+*.i
+*.lst
+*.order
+*.elf
+*.swp
+*.bin
+*.patch
+*.cfgtmp
+
+# host programs on Cygwin
+*.exe
+
+#
+# git files that we don't want to ignore even it they are dot-files
+#
+!.gitignore
+!.mailmap
+
+# gdb files
+.gdb_history
+
+# cscope files
+cscope.*
+
+# tags files
+TAGS
+tags
+
+# gnu global files
+GPATH
+GRTAGS
+GSYMS
+GTAGS
+
+*.orig
+*~
+\#*#
+
+#ignore output dir
+/bm[0-9][0-9][0-9][0-9]/out
+#ignore version file auto generate by makefile
+/bm[0-9][0-9][0-9][0-9]/common/version.c

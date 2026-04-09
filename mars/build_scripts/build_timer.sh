@@ -1,0 +1,1 @@
+make clean; make TEST_CASE=timer RUN_ENV=SRAM BOARD=ASIC DEBUG=1

@@ -1,0 +1,1 @@
+obj/cnm_fpga.o: sample/helper/misc/cnm_fpga.c

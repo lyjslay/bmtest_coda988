@@ -1,0 +1,36 @@
+// $Module: ive_dma $
+// $Script Version: 2.1.0 $
+// $RegisterBank Version: V 1.0.00 $
+// $Author:  $
+// $Date: Tue, 14 Sep 2021 09:57:55 AM $
+//
+#ifndef _IVE_DMA_REG_SW_H
+#define _IVE_DMA_REG_SW_H
+
+#include "reg.h"
+
+#undef  MODULE
+#define MODULE() ive_dma
+
+
+typedef struct _IVE_DMA_reg_SW_ {
+#undef  MODULE_REG_DEF
+#undef  MODULE_LUT_DEF
+#undef  MODULE_SECTION_DEF
+#define MODULE_SECTION_DEF(...)
+#define MODULE_REG_DEF(name, type, depth, ...) REG_ST_DEF(name, type, depth)
+#define MODULE_LUT_DEF(name, type, size, ...)  LUT_ST_DEF(name, type, size)
+#undef  REG_DEF_H
+#define REG_DEF_H() _reg_sw_def.h
+	#include MODULE_INCLUDE_DEF()
+	char section[32];
+} IVE_DMA_REG_SW;
+
+int ive_dma_reg_sw_load(IVE_DMA_REG_SW* sw, const char* section, const char* name, const char* value);
+
+int ive_dma_reg_sw_dump_ini(FILE* fp, IVE_DMA_REG_SW* sw);
+
+int ive_dma_reg_sw_print(IVE_DMA_REG_SW* sw);
+
+int ive_dma_reg_sw_init(IVE_DMA_REG_SW* sw, char* section);
+#endif //_IVE_DMA_REG_SW_H

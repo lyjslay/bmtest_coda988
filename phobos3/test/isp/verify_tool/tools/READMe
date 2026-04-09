@@ -1,0 +1,33 @@
+├── extract
+│   ├── combine                y planer u planer v planer->NV21
+│   ├── combine.c
+│   ├── compile                compile.sh
+│   ├── extract                y planer u planer v planer ppm->y u v
+│   ├── extract_bin.sh
+│   └── extract.c
+├── ini2code                    ini transform .h file
+│   ├── cmd
+│   ├── isp.ini
+│   ├── register.fm
+│   ├── register.list
+│   ├── run_para_parsing.pl
+│   └── test_cft2header_v2.py
+├── ini2code.sh                 gen .h file (code_dir/[case]/reg_cfg/[ini_frame_no]. .h)
+├── pld2ddr
+│   └── athena2_pld_ddr_mem_tool
+├── ppm2ddr.sh
+├── ppm2raw                     ppm2raw source code
+│   ├── ppm2raw
+│   └── ppm2raw.c
+├── ppm5_gen                    raw2ppm source code
+│   ├── compile
+│   ├── ppm2raw
+│   ├── ppm2raw.c
+│   ├── ppm5_gen
+│   ├── ppm5_gen.c
+│   ├── random_gen_ppm.sh       basic shell, only work under ppm5_gen
+│   └── random_ppm2raw.sh       basic shell, only work under ppm5_gen
+├── random_ppm2raw.sh           ppm2raw/ppm2nv21, gen dir(to_pld/[case]/[nv21_golden].[raw_src])
+└── READMe
+
+

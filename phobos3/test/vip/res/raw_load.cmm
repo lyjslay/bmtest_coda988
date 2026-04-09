@@ -1,0 +1,8 @@
+// load file to the following address
+LoadBINARY "planar0" PM:0x90000000
+LoadBINARY "planar1" PM:0x91000000
+;LoadBINARY "planar2" PM:0x92000000
+
+print "loading complete..."
+
+END

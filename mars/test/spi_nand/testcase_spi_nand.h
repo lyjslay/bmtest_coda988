@@ -1,0 +1,6 @@
+#ifndef _TESTCASE_SPI_H_
+#define _TESTCASE_SPI_H_
+
+#define BASE_SPI_NAND   0x04060000
+
+#endif  /* _TESTCASE_SPI_H_ */

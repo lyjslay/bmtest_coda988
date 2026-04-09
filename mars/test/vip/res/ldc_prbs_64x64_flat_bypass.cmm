@@ -1,0 +1,31 @@
+Data.Set PM:0a0c0000 %long 0x00000000 ;Format
+Data.Set PM:0a0c0004 %long 0x00000000 ;RasMode
+Data.Set PM:0a0c0008 %long 0x00000040 ;Xsize
+Data.Set PM:0a0c000c %long 0x00000040 ;Ysize
+Data.Set PM:0a0c0010 %long 0x00800000 ;MapBase
+Data.Set PM:0a0c0014 %long 0x00000001 ;MapBypass
+Data.Set PM:0a0c0020 %long 0x02400000 ;src_basey
+Data.Set PM:0a0c0024 %long 0x02410000 ;src_basec
+Data.Set PM:0a0c0028 %long 0x00000040 ;src_xsize
+Data.Set PM:0a0c002c %long 0x00000040 ;src_ysize
+Data.Set PM:0a0c0030 %long 0x00000000 ;src_xstr
+Data.Set PM:0a0c0034 %long 0x0000003f ;src_xend
+Data.Set PM:0a0c0038 %long 0x0033f17e ;src_bg
+Data.Set PM:0a0c0040 %long 0x02440000 ;dst_basey
+Data.Set PM:0a0c0044 %long 0x02450000 ;dst_basec
+Data.Set PM:0a0c0048 %long 0x00000000 ;dst_mode
+Data.Set PM:0a0c0060 %long 0x00000000 ;sb_mode
+Data.Set PM:0a0c0064 %long 0x00000000 ;sb_nb
+Data.Set PM:0a0c0068 %long 0x00000000 ;sb_size
+Data.Set PM:0a0c0074 %long 0x00000001 ;sb_sw_clr
+Data.Set PM:0a0c0070 %long 0x00000000 ;sb_sw_str
+Data.Set PM:0a0c006c %long 0x00000001 ;sb_set_str
+Data.Set PM:0a0c0050 %long 0x00000001 ;irqen
+Data.Set PM:0a0c0054 %long 0x00000001 ;pulse_start
+; r 0x0a0c0058 0x00000001 //irq_stat
+Wait 1.s
+; w 0x0a0c005c 0x00000001 //irq_clr
+;r 0x0a0c0084 0x00000001 //sb_dptr_ro
+;wait 1
+;r 0x0a0c007c 0x00000001 //sb_empty
+;r 0x0a0c0078 0x00000001 //sb_full

@@ -1,0 +1,70 @@
+do cv1835_core_reset.cmm 
+
+data.load.elf cv1835_ASIC_ddr3_2133_C00291C.elf
+;data.load.elf cv1835_ASIC_ddr3_1066_C00291C.elf
+gotostart
+DELeteBreak
+SetBREAK 0xC00291C %HW
+go
+wait !isrun()
+
+wait 100.ms
+DELeteBreak
+
+
+; efuse option
+Data.Set PM:0xb030010 %long 0
+
+; clear bitsteram buffer
+;MWriteS32 PM:0x113200000--PM:0x113220000 0x0
+;MWriteS32 PM:0x113300000--PM:0x113320000 0x0
+
+; ////////////////////////////////////////////////////////////////////////////////////
+; Encoder
+; ////////////////////////////////////////////////////////////////////////////////////
+
+; Load source
+;LoadBINARY     Z:\home\share\nfsroot\home\bitmain\test\yuv\coastguard_352x288_10.yuv PM:0x11B100000
+;LoadBINARY    Z:\home\arena\projects\bmtest\bm1882\Bosphorus_3840x2160_10.yuv PM:0x11B100000
+;LoadBINARY    Z:\home\share\nfsroot\home\bitmain\test\yuv\sintel_trailer_720x480_10.yuv PM:0x11B100000
+
+; Load firmware
+;LoadBINARY    Z:\home\arena\projects\bmtest\bm1882\980.bin PM:0x10B000000
+;LoadBINARY    Z:\home\arena\projects\bmtest\bm1882\monet.bin PM:0x10B000000
+
+; Load elf
+;data.load.elf Z:\home\arena\projects\cv1835\build\cv1835_ddr_init_and_run_bmtest\bm1882_ASIC_venc.elf
+
+; ////////////////////////////////////////////////////////////////////////////////////
+; Decoder
+; ////////////////////////////////////////////////////////////////////////////////////
+
+; Load stream
+LoadBINARY    Z:\home\arena\projects\cv1835\build\cv1835_ddr_init_and_run_bmtest\h264\dec-1.264 PM:0x12B000000
+;LoadBINARY    Z:\home\arena\projects\cv1835\build\cv1835_ddr_init_and_run_bmtest\h264\enc-5.264 PM:0x12B000000
+;LoadBINARY    Z:\home\arena\projects\cv1835\build\cv1835_ddr_init_and_run_bmtest\h264\enc-7-1.264 PM:0x12B000000
+;LoadBINARY    Z:\home\arena\projects\cv1835\build\cv1835_ddr_init_and_run_bmtest\h264\enc-7-2.264 PM:0x12B000000
+;LoadBINARY    Z:\home\arena\projects\cv1835\build\cv1835_ddr_init_and_run_bmtest\h264\enc-7-3.264 PM:0x12B000000
+;LoadBINARY    Z:\home\arena\projects\cv1835\build\cv1835_ddr_init_and_run_bmtest\h264\enc-7-4.264 PM:0x12B000000
+;LoadBINARY    Z:\home\arena\projects\cv1835\build\cv1835_ddr_init_and_run_bmtest\h264\enc-11-2.264 PM:0x12B000000
+
+;LoadBINARY    Z:\home\arena\projects\cv1835\build\cv1835_ddr_init_and_run_bmtest\enc1-1.265 PM:0x10B000000
+;LoadBINARY    Z:\home\arena\projects\cv1835\build\cv1835_ddr_init_and_run_bmtest\enc5.265 PM:0x10B000000
+;LoadBINARY    Z:\home\arena\projects\cv1835\build\cv1835_ddr_init_and_run_bmtest\h265\enc6-1.265 PM:0x10B000000
+;LoadBINARY    Z:\home\arena\projects\cv1835\build\cv1835_ddr_init_and_run_bmtest\h265\enc6-2.265 PM:0x10B000000
+;LoadBINARY    Z:\home\arena\projects\cv1835\build\cv1835_ddr_init_and_run_bmtest\h265\enc6-3.265 PM:0x10B000000
+;LoadBINARY    Z:\home\arena\projects\cv1835\build\cv1835_ddr_init_and_run_bmtest\h265\enc6-4.265 PM:0x10B000000
+;LoadBINARY    Z:\home\arena\projects\cv1835\build\cv1835_ddr_init_and_run_bmtest\h265\enc10-2.265 PM:0x10B000000
+
+;LoadBINARY    Z:\home\arena\projects\cv1835\build\cv1835_ddr_init_and_run_bmtest\enc14-1.265 PM:0x10B000000
+
+; Load firmware
+LoadBINARY    Z:\home\arena\projects\bmtest\bm1882\980.bin PM:0x12BA00000
+;LoadBINARY    Z:\home\arena\projects\bmtest\bm1882\monet.bin PM:0x10BA00000
+
+; Load elf
+data.load.elf Z:\home\arena\projects\cv1835\build\cv1835_ddr_init_and_run_bmtest\bm1882_ASIC_vdec.elf
+
+;go
+gotostart
+

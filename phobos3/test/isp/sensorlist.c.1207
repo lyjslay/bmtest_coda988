@@ -1,0 +1,4807 @@
+#include <stdlib.h>
+#include <stdint.h>
+#include <stdbool.h>
+#include <stdio.h>
+#include <string.h>
+
+#ifdef ENV_HOSTPC
+#include <stdint.h>
+#include <stdio.h>
+#include <unistd.h>
+#include "cli/command.h"
+#include "cli/cli.h"
+#else
+#include "command.h"
+#include "cli.h"
+#include "system_common.h"
+#include "module_testcase.h"
+#include "uart.h"
+#include "timer.h"
+#endif
+
+#include "../vip/reg.h"
+#include "inc/isp_reg.h"
+
+#include "sensorlist.h"
+#include "vip_common.h"
+
+
+
+#undef uartlog
+#define uartlog(fmt, args...) \
+{ \
+    printf(fmt, ##args); \
+    fflush(stdout); \
+}
+
+#define CIF_DPHY_ENABLE
+
+static int do_nothing(void *priv);
+static int imx290_poweron(void *);
+static int imx078_poweron(void *);
+static int ar0237_poweron(void *);
+static int ar0239_poweron(void *);
+static int os08a10_poweron(void *);
+static int imx327_poweron(void *);
+static int os08a10_intr(void *priv);
+static int as0142at_poweron(void *);
+static int imx327_poweron(void *);
+static int imx327_intr(void *priv);
+static int peri_up_0(void *);
+static int peri_down_0(void *);
+static int peri_up_1(void *);
+static int peri_down_1(void *);
+static int peri_up_2(void *);
+static int peri_down_2(void *);
+static int peri_up_3(void *);
+static int peri_down_3(void *);
+static int peri_up_4(void *);
+static int peri_down_4(void *);
+static int peri_up_5(void *);
+static int peri_down_5(void *);
+static int peri_up_6(void *);
+static int peri_down_6(void *);
+static int i2cloop(void *);
+static int spiloop(void *);
+static int sensor_verify_op(void *ctx);
+int config_csibdg(uint32_t width, uint32_t height, pattern_ctx *ctx,
+		uint8_t hdr, uint8_t yuv_sensor);
+
+static struct sensor_ops imx290_ops;
+static struct sensor_ops ar0239_ops;
+static struct sensor_ops ar0237_ops;
+static struct sensor_ops os08a10_ops;
+static struct sensor_ops imx327_ops;
+
+static pattern_ctx m_ptn_ctx = {
+	.vreg_bases = NULL,
+	.vreg_bases_pa = NULL,
+	.phys_regs  = NULL,
+	.mem_base   = DRAM_PHY_BASE,
+	.alloc_size = 0,
+	.alloc_cnt  = 0,
+	.ptn        = NULL,
+};
+
+static struct isp_ctx m_ispctx[2];
+static uint32_t	      sensor_mode;
+
+
+struct sensor_info imx290_info = {
+	.dev = 0x1A,
+	.alen = 2,
+	.dlen = 1,
+	.gain =  { .cur = 0, .min = 0, .max = 0xf0 },
+	.sgain =  { .cur = 0, .min = 0, .max = 0xf0 },
+	.shsl =  { .cur = 0, .min = 0, .max = 0 },
+	.shss =  { .cur = 0, .min = 0, .max = 0 },
+	.ops = &imx290_ops,
+};
+
+// sensor mode for imx290
+enum {
+	IMX290_MODE_720P60,
+	IMX290_MODE_720P30,
+	IMX290_MODE_720P15_HDR1,
+	IMX290_MODE_720P15_HDR2,
+};
+
+struct sensor_mode imx290_mode[] = {
+	[IMX290_MODE_720P60] =
+	{
+		.name = "720p60",
+		.bit_depth = 10,
+		.bayer = SENSOR_BAYER_GR,
+		.active_w = 1280,
+		.active_h = 720,
+		.total_w = 1308,
+		.total_h = 736,
+		.fp_w = 12,
+		.bp_w = 16,
+		.fp_h = 10,
+		.bp_h = 6,	// in spec it shall be 5 but csi-bdg report frame err.
+	},
+	[IMX290_MODE_720P30] =
+	{
+		.name = "720p30",
+		.bit_depth = 10,
+		.bayer = SENSOR_BAYER_GR,
+		.active_w = 1280,
+		.active_h = 720,
+		.total_w = 1308,
+		.total_h = 736,
+		.fp_w = 12,
+		.bp_w = 16,
+		.fp_h = 10,
+		.bp_h = 6,	// in spec it shall be 5 but csi-bdg report frame err.
+	},
+	[IMX290_MODE_720P15_HDR1] =
+	{
+		.name = "720p15_hdr1",
+		.bit_depth = 10,
+		.bayer = SENSOR_BAYER_GR,
+		.active_w = 1280,
+		.active_h = 720,
+		.total_w = 1308,
+		.total_h = 736,
+		.fp_w = 12,
+		.bp_w = 16,
+		.fp_h = 10,
+		.bp_h = 6,	// in spec it shall be 5 but csi-bdg report frame err.
+	},
+	[IMX290_MODE_720P15_HDR2] =
+	{
+		.name = "720p15_hdr2",
+		.bit_depth = 10,
+		.bayer = SENSOR_BAYER_GR,
+		.active_w = 1280,
+		.active_h = 720,
+		.total_w = 1308,
+		.total_h = 735,
+		.fp_w = 12,
+		.bp_w = 16,
+		.fp_h = 19,
+		.bp_h = 6,	// in spec it shall be 5 but csi-bdg report frame err.
+	},
+};
+
+// sensor mode for ar0237
+enum {
+	AR0237_MODE_720P30,
+	AR0237_MODE_720P30_PKT_SP_HDR
+};
+
+struct sensor_mode ar0237_mode[] = {
+	[AR0237_MODE_720P30] =
+	{
+		.name = "720p30",
+		.bit_depth = 10,
+		.bayer = SENSOR_BAYER_GB,
+		.active_w = 1280,
+		.active_h = 720,
+		.total_w = 1280,
+		.total_h = 720, // 744 for hdr pkt-sp
+		.fp_w = 0,
+		.bp_w = 0,
+		.fp_h = 0,
+		.bp_h = 6,	// in spec it shall be 5 but csi-bdg report frame err.
+	},
+	[AR0237_MODE_720P30_PKT_SP_HDR] =
+	{
+		.name = "720p30_hdr",
+		.bit_depth = 10,
+		.bayer = SENSOR_BAYER_GB,
+		.active_w = 1280,
+		.active_h = 720,
+		.total_w = 1280,
+		.total_h = 720, // 744 for hdr pkt-sp
+		.fp_w = 0,
+		.bp_w = 0,
+		.fp_h = 0,
+		.bp_h = 6,	// in spec it shall be 5 but csi-bdg report frame err.
+	},
+};
+
+// sensor mode for ar0239
+enum {
+	AR0239_MODE_720P30
+};
+
+struct sensor_mode ar0239_mode[] = {
+	{
+		.name = "720p30",
+		.bit_depth = 12,
+		.bayer = SENSOR_BAYER_GR,
+		.active_w = 1280,
+		.active_h = 720,
+		.total_w = 1280,
+		.total_h = 720,
+		.fp_w = 0,
+		.bp_w = 0,
+		.fp_h = 0,
+		.bp_h = 0,	// in spec it shall be 5 but csi-bdg report frame err.
+	},
+};
+
+// sensor mode for os08a10
+enum {
+	OS08A10_MODE_720P30,
+	OS08A10_MODE_720P30_HDR_DT,
+	OS08A10_MODE_720P30_HDR_VC
+};
+
+struct sensor_mode os08a10_mode[] = {
+	{
+		.name = "720p30",
+		.bit_depth = 10,
+		.bayer = SENSOR_BAYER_BG,
+		.active_w = 1280,
+		.active_h = 720,
+		.total_w = 1280,
+		.total_h = 720,
+		.fp_w = 0,
+		.bp_w = 0,
+		.fp_h = 0,
+		.bp_h = 0,	// in spec it shall be 5 but csi-bdg report frame err.
+	},
+	{
+		.name = "720p30_hdr_dt",
+		.bit_depth = 10,
+		.bayer = SENSOR_BAYER_BG,
+		.active_w = 1280,
+		.active_h = 720,
+		.total_w = 1280,
+		.total_h = 720,
+		.fp_w = 0,
+		.bp_w = 0,
+		.fp_h = 0,
+		.bp_h = 0,	// in spec it shall be 5 but csi-bdg report frame err.
+	},
+	{
+		.name = "720p30_hdr_vc",
+		.bit_depth = 10,
+		.bayer = SENSOR_BAYER_BG,
+		.active_w = 1280,
+		.active_h = 720,
+		.total_w = 1280,
+		.total_h = 720,
+		.fp_w = 0,
+		.bp_w = 0,
+		.fp_h = 0,
+		.bp_h = 0,	// in spec it shall be 5 but csi-bdg report frame err.
+	},
+};
+
+struct sensor_mode as0142at_mode[] = {
+	{
+		.name = "720p30",
+		.bit_depth = 8,
+		.active_w = 1280,
+		.active_h = 720,
+		.total_w = 1280,
+		.total_h = 720,
+	},
+};
+
+struct sensor_info imx078_info = {
+	.dev = 0x81,
+	.alen = 2,
+	.dlen = 1,
+};
+
+struct sensor_info ar0237_info = {
+	.dev = 0x10, //0x30,
+	.alen = 2,
+	.dlen = 2,
+	.gain =  { .cur = 0, .min = 0, .max = 0xf0 },
+	.sgain =  { .cur = 0, .min = 0, .max = 0xf0 },
+	.shsl =  { .cur = 0, .min = 0, .max = 0 },
+	.shss =  { .cur = 0, .min = 0, .max = 0 },
+	.ops = &ar0237_ops,
+};
+
+struct sensor_info ar0239_info = {
+	.dev = 0x10, //0x30,
+	.alen = 2,
+	.dlen = 2,
+	.gain =  { .cur = 0, .min = 0, .max = 0xf0 },
+	.sgain =  { .cur = 0, .min = 0, .max = 0xf0 },
+	.shsl =  { .cur = 0, .min = 0, .max = 0 },
+	.shss =  { .cur = 0, .min = 0, .max = 0 },
+	.ops = &ar0239_ops,
+};
+
+struct sensor_info os08a10_info = {
+	.dev = 0x36, //0x10,
+	.alen = 2,
+	.dlen = 1,
+	.gain =  { .cur = 0, .min = 0, .max = 0xf0 },
+	.sgain =  { .cur = 0, .min = 0, .max = 0xf0 },
+	.shsl =  { .cur = 0, .min = 0, .max = 0 },
+	.shss =  { .cur = 0, .min = 0, .max = 0 },
+	.ops = &os08a10_ops,
+};
+
+struct sensor_info as0142at_info = {
+	.dev = 0x10, //0x30,
+	.alen = 2,
+	.dlen = 2,
+};
+
+struct sensor_info imx327_info = {
+	.dev = 0x1A,
+	.alen = 2,
+	.dlen = 1,
+	.gain =  { .cur = 0, .min = 0, .max = 0xf0 },
+	.sgain =  { .cur = 0, .min = 0, .max = 0xf0 },
+	.shsl =  { .cur = 0, .min = 0, .max = 0 },
+	.shss =  { .cur = 0, .min = 0, .max = 0 },
+	.ops = &imx327_ops,
+};
+
+// sensor mode for imx327
+enum {
+	IMX327_MODE_720P30,
+	IMX327_MODE_720P15_HDR1,
+	IMX327_MODE_720P15_HDR2,
+};
+
+struct sensor_mode imx327_mode[] = {
+	[IMX327_MODE_720P30] =
+	{
+		.name = "720p30",
+		.bit_depth = 10,
+		.bayer = SENSOR_BAYER_GR,
+		.active_w = 1280,
+		.active_h = 720,
+		.total_w = 1308,
+		.total_h = 729,
+		.fp_w = 12,
+		.bp_w = 16,
+		.fp_h = 10,
+		.bp_h = 6,	// in spec it shall be 5 but csi-bdg report frame err.
+	},
+	[IMX327_MODE_720P15_HDR1] =
+	{
+		.name = "720p15_hdr1",
+		.bit_depth = 10,
+		.bayer = SENSOR_BAYER_GR,
+		.active_w = 1280,
+		.active_h = 720,
+		.total_w = 1308,
+		.total_h = 729,
+		.fp_w = 12,
+		.bp_w = 16,
+		.fp_h = 10,
+		.bp_h = 6,	// in spec it shall be 5 but csi-bdg report frame err.
+	},
+	[IMX327_MODE_720P15_HDR2] =
+	{
+		.name = "720p15_hdr2",
+		.bit_depth = 10,
+		.bayer = SENSOR_BAYER_GR,
+		.active_w = 1280,
+		.active_h = 720,
+		.total_w = 1308,
+		.total_h = 729,
+		.fp_w = 12,
+		.bp_w = 16,
+		.fp_h = 19,
+		.bp_h = 6,	// in spec it shall be 5 but csi-bdg report frame err.
+	},
+};
+
+static pattern_entry pattern_db[] = {
+	{
+		.name = "imx290_default",
+		.priv = (void *)&imx290_info,
+		.config_op = peri_up_0,
+		.start_op = imx290_poweron,
+		.stop_op = peri_down_0,
+		.verify_op = sensor_verify_op,
+	},
+	{
+		.name = "i2c_test_loop(imx290)",
+		.priv = (void *)&imx290_info,
+		.config_op = peri_up_0,
+		.start_op = i2cloop,
+		.stop_op = do_nothing,
+		.verify_op = NULL,
+	},
+	{
+		.name = "imx078_hd",
+		.priv = (void *)&imx078_info,
+		.config_op = peri_up_1,
+		.start_op = imx078_poweron,
+		.stop_op = peri_down_1,
+		.verify_op = NULL,
+	},
+	{
+		.name = "spi_test_loop(imx078)",
+		.priv = (void *)&imx078_info,
+		.config_op = peri_up_1,
+		.start_op = spiloop,
+		.stop_op = do_nothing,
+		.verify_op = NULL,
+	},
+	{
+		.name = "ar0237",
+		.priv = (void *)&ar0237_info,
+		.config_op = peri_up_2,
+		.start_op = ar0237_poweron,
+		.stop_op = peri_down_2,
+		.verify_op = sensor_verify_op,
+	},
+	{
+		.name = "i2c_test_loop(ar0237)",
+		.priv = (void *)&ar0237_info,
+		.config_op = peri_up_2,
+		.start_op = i2cloop,
+		.stop_op = do_nothing,
+		.verify_op = NULL,
+	},
+	{
+		.name = "ar0239",
+		.priv = (void *)&ar0239_info,
+		.config_op = peri_up_3,
+		.start_op = ar0239_poweron,
+		.stop_op = peri_down_3,
+		.verify_op = sensor_verify_op,
+	},
+	{
+		.name = "i2c_test_loop(ar0239)",
+		.priv = (void *)&ar0239_info,
+		.config_op = peri_up_3,
+		.start_op = i2cloop,
+		.stop_op = do_nothing,
+		.verify_op = NULL,
+	},
+	{
+		.name = "os08a10",
+		.priv = (void *)&os08a10_info,
+		.config_op = peri_up_4,
+		.start_op = os08a10_poweron,
+		.stop_op = peri_down_4,
+		.intr_op = os08a10_intr,
+		.verify_op = sensor_verify_op,
+	},
+	{
+		.name = "i2c_test_loop(os08a10)",
+		.priv = (void *)&os08a10_info,
+		.config_op = peri_up_4,
+		.start_op = i2cloop,
+		.stop_op = do_nothing,
+		.verify_op = NULL,
+	},
+	{
+		.name = "as0142at",
+		.priv = (void *)&as0142at_info,
+		.config_op = peri_up_5,
+		.start_op = as0142at_poweron,
+		.stop_op = peri_down_5,
+		.verify_op = sensor_verify_op,
+	},
+	{
+		.name = "imx327_default",
+		.priv = (void *)&imx327_info,
+		.config_op = peri_up_6,
+		.start_op = imx327_poweron,
+		.stop_op = peri_down_6,
+		.intr_op = imx327_intr,
+		.verify_op = sensor_verify_op,
+	},
+	{
+		.name = "END",
+		.config_op = NULL,
+	}
+};
+
+extern int cli_readline(char *prompt, char *cmdbuf);
+
+/********************************************************************
+ *   APIs to replace bmtest's standard APIs
+ ********************************************************************/
+
+static void imx290_get_gain(void *priv, struct sensor_prop *prop)
+{
+	struct sensor_info *sinf = (struct sensor_info *)priv;
+
+	*prop = sinf->gain;
+	sinf->adpt->read(sinf->adpt, sinf->dev, 0x3014, sinf->alen, (uint8_t*)&(prop->cur), 1);
+
+	return;
+}
+
+static void imx290_set_gain(void *priv, uint16_t gain)
+{
+	struct sensor_info *sinf = (struct sensor_info *)priv;
+
+	sinf->adpt->write(sinf->adpt, sinf->dev, 0x3014, sinf->alen, (uint8_t*)&(gain), 1);
+	sinf->gain.cur = gain;
+
+	return;
+}
+
+static void imx290_get_sgain(void *priv, struct sensor_prop *prop)
+{
+	struct sensor_info *sinf = (struct sensor_info *)priv;
+
+	*prop = sinf->sgain;
+	sinf->adpt->read(sinf->adpt, sinf->dev, 0x30F2, sinf->alen, (uint8_t*)&(prop->cur), 1);
+
+	return;
+}
+
+static void imx290_set_sgain(void *priv, uint16_t gain)
+{
+	struct sensor_info *sinf = (struct sensor_info *)priv;
+
+	sinf->adpt->write(sinf->adpt, sinf->dev, 0x30F2, sinf->alen, (uint8_t*)&(gain), 1);
+	sinf->sgain.cur = gain;
+
+	return;
+}
+
+static void imx290_get_shsl(void *priv, struct sensor_prop *prop)
+{
+	struct sensor_info *sinf = (struct sensor_info *)priv;
+	const uint16_t addr[][3] = {{0x3020, 0x3021, 0x3022}, {0x3024, 0x3025, 0x3026}};
+
+	*prop = sinf->shsl;
+	sinf->adpt->read(sinf->adpt, sinf->dev, addr[sinf->ishdr][0], sinf->alen, (uint8_t*)&(prop->cur), 1);
+	sinf->adpt->read(sinf->adpt, sinf->dev, addr[sinf->ishdr][1], sinf->alen, ((uint8_t*)&(prop->cur)) + 1, 1);
+	sinf->adpt->read(sinf->adpt, sinf->dev, addr[sinf->ishdr][2], sinf->alen, ((uint8_t*)&(prop->cur)) + 2, 1);
+
+	return;
+}
+
+static void imx290_set_shsl(void *priv, uint32_t shs)
+{
+	struct sensor_info *sinf = (struct sensor_info *)priv;
+	const uint16_t addr[][3] = {{0x3020, 0x3021, 0x3022}, {0x3024, 0x3025, 0x3026}};
+
+	sinf->adpt->write(sinf->adpt, sinf->dev, addr[sinf->ishdr][0], sinf->alen, (uint8_t*)&(shs), 1);
+	sinf->adpt->write(sinf->adpt, sinf->dev, addr[sinf->ishdr][1], sinf->alen, ((uint8_t*)&(shs)) + 1, 1);
+	sinf->adpt->write(sinf->adpt, sinf->dev, addr[sinf->ishdr][2], sinf->alen, ((uint8_t*)&(shs)) + 2, 1);
+	sinf->shsl.cur = shs;
+
+	return;
+}
+
+static void imx290_get_shss(void *priv, struct sensor_prop *prop)
+{
+	struct sensor_info *sinf = (struct sensor_info *)priv;
+
+	*prop = sinf->shss;
+	sinf->adpt->read(sinf->adpt, sinf->dev, 0x3020, sinf->alen, (uint8_t*)&(prop->cur), 1);
+	sinf->adpt->read(sinf->adpt, sinf->dev, 0x3021, sinf->alen, ((uint8_t*)&(prop->cur)) + 1, 1);
+	sinf->adpt->read(sinf->adpt, sinf->dev, 0x3022, sinf->alen, ((uint8_t*)&(prop->cur)) + 2, 1);
+
+	return;
+}
+
+static void imx290_set_shss(void *priv, uint32_t shs)
+{
+	struct sensor_info *sinf = (struct sensor_info *)priv;
+
+	sinf->adpt->write(sinf->adpt, sinf->dev, 0x3020, sinf->alen, (uint8_t*)&(shs), 1);
+	sinf->adpt->write(sinf->adpt, sinf->dev, 0x3021, sinf->alen, ((uint8_t*)&(shs)) + 1, 1);
+	sinf->adpt->write(sinf->adpt, sinf->dev, 0x3022, sinf->alen, ((uint8_t*)&(shs)) + 2, 1);
+	sinf->shss.cur = shs;
+
+	return;
+}
+
+static struct sensor_ops imx290_ops = {
+	.get_gain = imx290_get_gain,
+	.set_gain = imx290_set_gain,
+	.get_sgain = imx290_get_sgain,
+	.set_sgain = imx290_set_sgain,
+	.get_shsl = imx290_get_shsl,
+	.set_shsl = imx290_set_shsl,
+	.get_shss = imx290_get_shss,
+	.set_shss = imx290_set_shss,
+};
+
+static void os08a10_set_shsl(void *priv, uint32_t shs)
+{
+	struct sensor_info *sinf = (struct sensor_info *)priv;
+
+	sinf->adpt->write(sinf->adpt, sinf->dev, 0x3502, sinf->alen, (uint8_t*)&(shs), 1);
+	sinf->adpt->write(sinf->adpt, sinf->dev, 0x3501, sinf->alen, ((uint8_t*)&(shs)) + 1, 1);
+	sinf->shsl.cur = shs;
+
+	return;
+}
+
+static void os08a10_set_shss(void *priv, uint32_t shs)
+{
+	struct sensor_info *sinf = (struct sensor_info *)priv;
+
+	sinf->adpt->write(sinf->adpt, sinf->dev, 0x3512, sinf->alen, (uint8_t*)&(shs), 1);
+	sinf->adpt->write(sinf->adpt, sinf->dev, 0x3511, sinf->alen, ((uint8_t*)&(shs)) + 1, 1);
+	sinf->shsl.cur = shs;
+
+	return;
+}
+
+static void os08a10_set_gain(void *priv, uint16_t gain)
+{
+	struct sensor_info *sinf = (struct sensor_info *)priv;
+
+	sinf->adpt->write(sinf->adpt, sinf->dev, 0x3509, sinf->alen, (uint8_t*)&(gain), 1);
+	sinf->adpt->write(sinf->adpt, sinf->dev, 0x3508, sinf->alen, ((uint8_t*)&(gain)) + 1, 1);
+	sinf->gain.cur = gain;
+
+	return;
+}
+
+static void os08a10_set_sgain(void *priv, uint16_t gain)
+{
+	struct sensor_info *sinf = (struct sensor_info *)priv;
+
+	sinf->adpt->write(sinf->adpt, sinf->dev, 0x350D, sinf->alen, (uint8_t*)&(gain), 1);
+	sinf->adpt->write(sinf->adpt, sinf->dev, 0x350C, sinf->alen, ((uint8_t*)&(gain)) + 1, 1);
+	sinf->shsl.cur = gain;
+
+	return;
+}
+
+static struct sensor_ops os08a10_ops = {
+	.set_gain = os08a10_set_gain,
+	.set_sgain = os08a10_set_sgain,
+	.set_shsl = os08a10_set_shsl,
+	.set_shss = os08a10_set_shss,
+};
+
+static void ar0239_set_shsl(void *priv, uint32_t shs)
+{
+	struct sensor_info *sinf = (struct sensor_info *)priv;
+
+	shs = ((shs&0xFF)<<8) | ((shs>>8)&0xFF);
+	sinf->adpt->write(sinf->adpt, sinf->dev, 0x3012, sinf->alen, (uint8_t*)&(shs), 2);
+	sinf->shsl.cur = shs;
+
+	return;
+}
+
+static void ar0239_set_gain(void *priv, uint16_t gain)
+{
+	struct sensor_info *sinf = (struct sensor_info *)priv;
+	uint16_t value = 0x0004;
+
+	value = ((value&0xFF)<<8) | ((value>>8)&0xFF);
+	gain = ((gain&0xFF)<<8) | ((gain>>8)&0xFF);
+	sinf->adpt->write(sinf->adpt, sinf->dev, 0x3100, sinf->alen, (uint8_t*)&(value), 2);
+	sinf->adpt->write(sinf->adpt, sinf->dev, 0x3060, sinf->alen, (uint8_t*)&(gain), 2);
+	sinf->gain.cur = gain;
+
+	return;
+}
+
+static struct sensor_ops ar0239_ops = {
+	.set_gain = ar0239_set_gain,
+	.set_shsl = ar0239_set_shsl,
+};
+
+static void ar0237_set_shsl(void *priv, uint32_t shs)
+{
+	struct sensor_info *sinf = (struct sensor_info *)priv;
+
+	shs = ((shs&0xFF)<<8) | ((shs>>8)&0xFF);
+	sinf->adpt->write(sinf->adpt, sinf->dev, 0x3012, sinf->alen, (uint8_t*)&(shs), 2);
+	sinf->shsl.cur = shs;
+
+	return;
+}
+
+static void ar0237_set_shss(void *priv, uint32_t shs)
+{
+	struct sensor_info *sinf = (struct sensor_info *)priv;
+
+	shs = ((shs&0xFF)<<8) | ((shs>>8)&0xFF);
+	sinf->adpt->write(sinf->adpt, sinf->dev, 0x3212, sinf->alen, (uint8_t*)&(shs), 2);
+	sinf->shsl.cur = shs;
+
+	return;
+}
+
+static void ar0237_set_gain(void *priv, uint16_t gain)
+{
+	struct sensor_info *sinf = (struct sensor_info *)priv;
+	const uint16_t addr[2] = {0x3060, 0x312C};
+	uint16_t value = sinf->ishdr?0x0504:0x0004;
+
+	value = ((value&0xFF)<<8) | ((value>>8)&0xFF);
+	gain = ((gain&0xFF)<<8) | ((gain>>8)&0xFF);
+	sinf->adpt->write(sinf->adpt, sinf->dev, 0x3100, sinf->alen, (uint8_t*)&(value), 2);
+	sinf->adpt->write(sinf->adpt, sinf->dev, addr[sinf->ishdr], sinf->alen, (uint8_t*)&(gain), 2);
+	sinf->gain.cur = gain;
+
+	return;
+}
+
+static void ar0237_set_sgain(void *priv, uint16_t gain)
+{
+	struct sensor_info *sinf = (struct sensor_info *)priv;
+	uint16_t value = 0x0504;
+
+	value = ((value&0xFF)<<8) | ((value>>8)&0xFF);
+	gain = ((gain&0xFF)<<8) | ((gain>>8)&0xFF);
+	sinf->adpt->write(sinf->adpt, sinf->dev, 0x3100, sinf->alen, (uint8_t*)&(value), 2);
+	sinf->adpt->write(sinf->adpt, sinf->dev, 0x3060, sinf->alen, (uint8_t*)&(gain), 2);
+	sinf->gain.cur = gain;
+
+	return;
+}
+
+static struct sensor_ops ar0237_ops = {
+	.set_gain = ar0237_set_gain,
+	.set_sgain = ar0237_set_sgain,
+	.set_shsl = ar0237_set_shsl,
+	.set_shss = ar0237_set_shss,
+};
+
+static void imx327_get_gain(void *priv, struct sensor_prop *prop)
+{
+	struct sensor_info *sinf = (struct sensor_info *)priv;
+
+	*prop = sinf->gain;
+	sinf->adpt->read(sinf->adpt, sinf->dev, 0x3014, sinf->alen, (uint8_t*)&(prop->cur), 1);
+
+	return;
+}
+
+static void imx327_set_gain(void *priv, uint16_t gain)
+{
+	struct sensor_info *sinf = (struct sensor_info *)priv;
+
+	sinf->adpt->write(sinf->adpt, sinf->dev, 0x3014, sinf->alen, (uint8_t*)&(gain), 1);
+	sinf->gain.cur = gain;
+
+	return;
+}
+
+static void imx327_get_sgain(void *priv, struct sensor_prop *prop)
+{
+	struct sensor_info *sinf = (struct sensor_info *)priv;
+
+	*prop = sinf->sgain;
+	sinf->adpt->read(sinf->adpt, sinf->dev, 0x30F2, sinf->alen, (uint8_t*)&(prop->cur), 1);
+
+	return;
+}
+
+static void imx327_set_sgain(void *priv, uint16_t gain)
+{
+	struct sensor_info *sinf = (struct sensor_info *)priv;
+
+	sinf->adpt->write(sinf->adpt, sinf->dev, 0x30F2, sinf->alen, (uint8_t*)&(gain), 1);
+	sinf->sgain.cur = gain;
+
+	return;
+}
+
+static void imx327_get_shsl(void *priv, struct sensor_prop *prop)
+{
+	struct sensor_info *sinf = (struct sensor_info *)priv;
+	const uint16_t addr[][3] = {{0x3020, 0x3021, 0x3022}, {0x3024, 0x3025, 0x3026}};
+
+	*prop = sinf->shsl;
+	sinf->adpt->read(sinf->adpt, sinf->dev, addr[sinf->ishdr][0], sinf->alen, (uint8_t*)&(prop->cur), 1);
+	sinf->adpt->read(sinf->adpt, sinf->dev, addr[sinf->ishdr][1], sinf->alen, ((uint8_t*)&(prop->cur)) + 1, 1);
+	sinf->adpt->read(sinf->adpt, sinf->dev, addr[sinf->ishdr][2], sinf->alen, ((uint8_t*)&(prop->cur)) + 2, 1);
+
+	return;
+}
+
+static void imx327_set_shsl(void *priv, uint32_t shs)
+{
+	struct sensor_info *sinf = (struct sensor_info *)priv;
+	const uint16_t addr[][3] = {{0x3020, 0x3021, 0x3022}, {0x3024, 0x3025, 0x3026}};
+
+	sinf->adpt->write(sinf->adpt, sinf->dev, addr[sinf->ishdr][0], sinf->alen, (uint8_t*)&(shs), 1);
+	sinf->adpt->write(sinf->adpt, sinf->dev, addr[sinf->ishdr][1], sinf->alen, ((uint8_t*)&(shs)) + 1, 1);
+	sinf->adpt->write(sinf->adpt, sinf->dev, addr[sinf->ishdr][2], sinf->alen, ((uint8_t*)&(shs)) + 2, 1);
+	sinf->shsl.cur = shs;
+
+	return;
+}
+
+static void imx327_get_shss(void *priv, struct sensor_prop *prop)
+{
+	struct sensor_info *sinf = (struct sensor_info *)priv;
+
+	*prop = sinf->shss;
+	sinf->adpt->read(sinf->adpt, sinf->dev, 0x3020, sinf->alen, (uint8_t*)&(prop->cur), 1);
+	sinf->adpt->read(sinf->adpt, sinf->dev, 0x3021, sinf->alen, ((uint8_t*)&(prop->cur)) + 1, 1);
+	sinf->adpt->read(sinf->adpt, sinf->dev, 0x3022, sinf->alen, ((uint8_t*)&(prop->cur)) + 2, 1);
+
+	return;
+}
+
+static void imx327_set_shss(void *priv, uint32_t shs)
+{
+	struct sensor_info *sinf = (struct sensor_info *)priv;
+
+	sinf->adpt->write(sinf->adpt, sinf->dev, 0x3020, sinf->alen, (uint8_t*)&(shs), 1);
+	sinf->adpt->write(sinf->adpt, sinf->dev, 0x3021, sinf->alen, ((uint8_t*)&(shs)) + 1, 1);
+	sinf->adpt->write(sinf->adpt, sinf->dev, 0x3022, sinf->alen, ((uint8_t*)&(shs)) + 2, 1);
+	sinf->shss.cur = shs;
+
+	return;
+}
+
+static struct sensor_ops imx327_ops = {
+	.get_gain = imx327_get_gain,
+	.set_gain = imx327_set_gain,
+	.get_sgain = imx327_get_sgain,
+	.set_sgain = imx327_set_sgain,
+	.get_shsl = imx327_get_shsl,
+	.set_shsl = imx327_set_shsl,
+	.get_shss = imx327_get_shss,
+	.set_shss = imx327_set_shss,
+};
+
+int sensor_get_gain(pattern_entry *ptn, struct sensor_prop *prop)
+{
+	if (ptn == NULL) {
+		uartlog("null sensor ptn\n");
+		return -1;
+	}
+
+	if (strcmp(ptn->name, "imx290_default") == 0) {
+		imx290_get_gain(ptn->priv, prop);
+	}
+
+	return 0;
+}
+
+int sensor_set_gain(pattern_entry *ptn, uint16_t gain)
+{
+	if (ptn == NULL) {
+		uartlog("null sensor ptn\n");
+		return -1;
+	}
+
+	struct sensor_prop prop;
+	if (strcmp(ptn->name, "imx290_default") == 0) {
+		imx290_get_gain(ptn->priv, &prop);
+		if (gain > prop.max || gain < prop.min)
+			return -1;
+		imx290_set_gain(ptn->priv, gain);
+	}
+	return 0;
+}
+
+int sensor_get_sgain(pattern_entry *ptn, struct sensor_prop *prop)
+{
+	if (ptn == NULL) {
+		uartlog("null sensor ptn\n");
+		return -1;
+	}
+
+	if (strcmp(ptn->name, "imx290_default") == 0) {
+		imx290_get_sgain(ptn->priv, prop);
+	}
+
+	return 0;
+}
+
+int sensor_set_sgain(pattern_entry *ptn, uint16_t gain)
+{
+	if (ptn == NULL) {
+		uartlog("null sensor ptn\n");
+		return -1;
+	}
+
+	struct sensor_prop prop;
+	if (strcmp(ptn->name, "imx290_default") == 0) {
+		imx290_get_sgain(ptn->priv, &prop);
+		if (gain > prop.max || gain < prop.min)
+			return -1;
+		imx290_set_sgain(ptn->priv, gain);
+	}
+	return 0;
+}
+
+int sensor_get_shsl(pattern_entry *ptn, struct sensor_prop *prop)
+{
+	if (ptn == NULL) {
+		uartlog("null sensor ptn\n");
+		return -1;
+	}
+
+	if (strcmp(ptn->name, "imx290_default") == 0) {
+		imx290_get_shsl(ptn->priv, prop);
+	}
+
+	return 0;
+}
+
+int sensor_set_shsl(pattern_entry *ptn, uint32_t shs)
+{
+	if (ptn == NULL) {
+		uartlog("null sensor ptn\n");
+		return -1;
+	}
+
+	struct sensor_prop prop;
+	if (strcmp(ptn->name, "imx290_default") == 0) {
+		imx290_get_shsl(ptn->priv, &prop);
+		if (shs > prop.max || shs < prop.min)
+			return -1;
+		imx290_set_shsl(ptn->priv, shs);
+	}
+	if (strcmp(ptn->name, "os08a10") == 0) {
+		os08a10_set_shsl(ptn->priv, shs);
+	}
+	return 0;
+}
+
+int sensor_get_shss(pattern_entry *ptn, struct sensor_prop *prop)
+{
+	if (ptn == NULL) {
+		uartlog("null sensor ptn\n");
+		return -1;
+	}
+
+	if (strcmp(ptn->name, "imx290_default") == 0) {
+		imx290_get_shss(ptn->priv, prop);
+	}
+
+	return 0;
+}
+
+int sensor_set_shss(pattern_entry *ptn, uint32_t shs)
+{
+	if (ptn == NULL) {
+		uartlog("null sensor ptn\n");
+		return -1;
+	}
+
+	struct sensor_prop prop;
+	if (strcmp(ptn->name, "imx290_default") == 0) {
+		imx290_get_shss(ptn->priv, &prop);
+		if (shs > prop.max || shs < prop.min)
+			return -1;
+		imx290_set_shss(ptn->priv, shs);
+	}
+	if (strcmp(ptn->name, "os08a10") == 0) {
+		os08a10_set_shss(ptn->priv, shs);
+	}
+	return 0;
+}
+
+static int do_nothing(void *priv)
+{
+	uartlog("do noting\n");
+	return 0;
+}
+
+#define SNSR_TEST_CAPTURE_NUM	3
+
+static int sensor_verify_op(void *priv)
+{
+	pattern_ctx *ctx = (pattern_ctx *)priv;
+	struct isp_ctx     *ictx = &m_ispctx[0];
+	struct sensor_info *sinf = (struct sensor_info *)ctx->ptn->priv;
+	uint64_t    bayer_w_addr[SNSR_TEST_CAPTURE_NUM][2] = {
+				{0x112000000, 0x112800000},
+				{0x113000000, 0x113800000},
+				{0x114000000, 0x114800000}};
+	uint64_t    bayer_w_addr_yuv[SNSR_TEST_CAPTURE_NUM][3] = {
+				{0x112000000, 0x112800000, 0x113000000},
+				{0x113800000, 0x114000000, 0x114800000},
+				{0x115000000, 0x115800000, 0x116000000}};
+
+	while(1) {
+		uint64_t    bufaddr;
+		uint32_t    bufsize;
+		uint32_t    tmp = 0, test_mode = 0, value = 0;
+		int cnt = 0, err_cnt = 0;
+
+		bm_get_num("Leave test(0), GAIN(1), SGAIN(2), SHS(3), SHSS(4), Burning(5):", test_mode);
+
+		if (!test_mode)
+			break;
+
+		bm_get_num("Value:", value);
+
+		/* capture the 1st default frame. */
+		/* Polling Vsync */
+		writel(0x0a001064, 0xFFF);
+		for(;;) {
+			if (readl(0x0a001064) & 0xC0)
+				break;
+		}
+		writel(0x0a001064, 0xFFF);
+
+		switch (test_mode) {
+		case 1:
+			/* set long gain */
+			if (sinf->ops && sinf->ops->set_gain)
+				sinf->ops->set_gain(sinf, value);
+			break;
+		case 2:
+			/* set short gain */
+			if (sinf->ops && sinf->ops->set_sgain)
+				sinf->ops->set_sgain(sinf, value);
+			break;
+		case 3:
+			/* Set long shutter */
+			if (sinf->ops && sinf->ops->set_shsl)
+				sinf->ops->set_shsl(sinf, value);
+			break;
+		case 4:
+			/* Set short shutter */
+			if (sinf->ops && sinf->ops->set_shss)
+				sinf->ops->set_shss(sinf, value);
+			if (strcmp(ctx->ptn->name, "os08a10") == 0) {
+				struct sensor_mode *mode = &os08a10_mode[OS08A10_MODE_720P30];
+
+				sinf->shsl.cur = value;
+				config_csibdg(mode->total_w,
+						mode->total_h+sinf->shsl.cur+23,
+						ctx, 1, 0);
+#if 0
+				/* Set MAC */
+				value = (readl(0x0a0c2044) & ~0xFFFF) |
+					(value+5+18);
+				writel(0x0a0c2044, value);
+#endif
+			}
+			break;
+		case 5:
+			uartlog("burning %d frame, start!\n", value);
+			break;
+		default:
+			return 0;
+		}
+		while(cnt<(test_mode==5?value:SNSR_TEST_CAPTURE_NUM)) {
+			/* set frame valid*/
+			writel(0x0a000014, 1);
+			/* polling frame done. */
+			for(;;) {
+				if (readl(0x0a001064) & 0x3F) {
+					uartlog("frm[%d] err 0x%x\n",
+							cnt, readl(0x0a001064));
+					/* Stop if it is not burnin test.*/
+					if (test_mode != 5)
+						return -1;
+					err_cnt++;
+					writel(0x0a001064, 0x3F);
+					break;
+				}
+				if (readl(0x0a070000) & 0x1) {
+					writel(0x0a070000, 1);
+					break;
+				}
+			}
+			/* Config the dma */
+			if (!ictx->is_yuv_sensor) {
+				bufaddr = bayer_w_addr[cnt%SNSR_TEST_CAPTURE_NUM][0];
+				ispblk_dma_config(ictx, ISP_BLK_ID_DMA0, bufaddr);
+				if (ictx->is_hdr_on) {
+					bufaddr = bayer_w_addr[cnt%SNSR_TEST_CAPTURE_NUM][1];
+					ispblk_dma_config(ictx, ISP_BLK_ID_DMA1, bufaddr);
+				}
+			} else {
+				bufaddr = bayer_w_addr_yuv[cnt%SNSR_TEST_CAPTURE_NUM][0];
+				ispblk_dma_config(ictx, ISP_BLK_ID_DMA0, bufaddr);
+				bufaddr = bayer_w_addr_yuv[cnt%SNSR_TEST_CAPTURE_NUM][1];
+				ispblk_dma_config(ictx, ISP_BLK_ID_DMA1, bufaddr);
+				bufaddr = bayer_w_addr_yuv[cnt%SNSR_TEST_CAPTURE_NUM][2];
+				ispblk_dma_config(ictx, ISP_BLK_ID_DMA2, bufaddr);
+			}
+			cnt++;
+		}
+		/* restore the dma */
+		if (!ictx->is_yuv_sensor) {
+			bufaddr = 0x111000000;
+			bufsize = VIP_ALIGN((ictx->src_width*12)/8) * ictx->src_height;
+			uartlog("csi_bdg to dram 0x%lx size(%#x)\n", bufaddr, bufsize);
+			ispblk_dma_config(ictx, ISP_BLK_ID_DMA0, bufaddr);
+			if (ictx->is_hdr_on) {
+				bufaddr = 0x111800000;
+				ispblk_dma_config(ictx, ISP_BLK_ID_DMA1, bufaddr);
+				uartlog("se csi_bdg to dram 0x%lx size(%#x)\n", bufaddr, bufsize);
+			}
+			for (cnt=0; cnt<SNSR_TEST_CAPTURE_NUM-1; cnt++) {
+				bufaddr = bayer_w_addr[cnt][0];
+				uartlog("csi_bdg to dram 0x%lx size(%#x)\n", bufaddr, bufsize);
+				if (ictx->is_hdr_on) {
+					bufaddr = bayer_w_addr[cnt][1];
+					uartlog("se csi_bdg to dram 0x%lx size(%#x)\n", bufaddr, bufsize);
+				}
+			}
+			if (test_mode == 5)
+				uartlog("%d error(s) in %d frame\n", err_cnt, value);
+		}
+	}
+
+	uartlog("%s done\n", __func__);
+	return 0;
+
+}
+
+int config_csibdg(uint32_t width, uint32_t height,
+		pattern_ctx *ctx, uint8_t hdr, uint8_t yuv_sensor)
+{
+	struct isp_ctx     *ictx = &m_ispctx[0];
+	uint32_t    bufsize;
+	uint64_t    bufaddr;
+	uint64_t    bayer_w_addr[3] = {0x111000000, 0x111800000, 0x112000000};
+
+	uartlog("%s configure csibdg-preraw-isptop\n", __func__);
+
+	ictx->src_width = width;//800;
+	ictx->src_height = height;//600;
+
+	ictx->phys_regs = ctx->phys_regs;
+
+	ictx->rgb_color_mode = 2;
+	ictx->csibdg_patgen_en = 0;
+	ictx->sensor_bitdepth = (!!yuv_sensor)?8:12;
+
+	ictx->cam_id = 0;
+	ictx->is_yuv_sensor = !!yuv_sensor;
+	ictx->is_hdr_on = !!hdr;
+	ictx->is_offline_preraw = 0;
+	ictx->is_offline_postraw = 1;
+	ictx->is_offline_scaler = 1;
+	ictx->vreg_page_idx = 0;
+
+	ispblk_preraw_config(ictx);
+	ispblk_isptop_config(ictx);
+	ispblk_csibdg_config(ictx);
+
+	bufaddr = bayer_w_addr[0];
+	ispblk_dma_config(ictx, ISP_BLK_ID_DMA0, bufaddr);
+
+	ispblk_dma_enable(ictx, ISP_BLK_ID_DMA0, 1);
+
+	if (ictx->is_hdr_on) {
+		bufsize = VIP_ALIGN((ictx->src_width*12)/8) * ictx->src_height;
+		uartlog("csi_bdg to dram 0x%lx size(%#x)\n", bufaddr, bufsize);
+		memset((void*)bufaddr, 0x08, bufsize);
+		bufaddr = bayer_w_addr[1];
+		ispblk_dma_config(ictx, ISP_BLK_ID_DMA1, bufaddr);
+		ispblk_dma_enable(ictx, ISP_BLK_ID_DMA1, 1);
+		uartlog("se csi_bdg to dram 0x%lx size(%#x)\n", bufaddr, bufsize);
+		memset((void*)bufaddr, 0x08, bufsize);
+	} else if (ictx->is_yuv_sensor) {
+		bufsize = VIP_ALIGN(ictx->src_width) * ictx->src_height;
+		uartlog("csi_bdg to dram 0x%lx size(%#x)\n", bufaddr, bufsize);
+		memset((void*)bufaddr, 0x08, bufsize);
+		bufaddr = bayer_w_addr[1];
+		ispblk_dma_config(ictx, ISP_BLK_ID_DMA1, bufaddr);
+		ispblk_dma_enable(ictx, ISP_BLK_ID_DMA1, 1);
+		uartlog("cb csi_bdg to dram 0x%lx size(%#x)\n", bufaddr, bufsize>>1);
+		memset((void*)bufaddr, 0x08, bufsize);
+		bufaddr = bayer_w_addr[2];
+		ispblk_dma_config(ictx, ISP_BLK_ID_DMA2, bufaddr);
+		ispblk_dma_enable(ictx, ISP_BLK_ID_DMA2, 1);
+		uartlog("cr csi_bdg to dram 0x%lx size(%#x)\n", bufaddr, bufsize>>1);
+		memset((void*)bufaddr, 0x08, bufsize);
+	} else {
+		bufsize = VIP_ALIGN((ictx->src_width*12)/8) * ictx->src_height;
+		uartlog("csi_bdg to dram 0x%lx size(%#x)\n", bufaddr, bufsize);
+		memset((void*)bufaddr, 0x08, bufsize);
+	}
+
+	isp_streaming(ictx, 1);
+
+	return 0;
+}
+
+int list_sensor(void)
+{
+	int i;
+
+	uartlog("=======================================\n");
+	uartlog("            Sensor List\n");
+	uartlog("=======================================\n");
+	for (i = 0; i < ARRAY_SIZE(pattern_db); ++i) {
+		if (pattern_db[i].config_op == NULL)
+			break;
+
+		uartlog("%02d. %s\n", i, pattern_db[i].name);
+	}
+	uartlog("---------------------------------------\n");
+
+	return 0;
+}
+
+pattern_ctx* get_sensor_ctx(void)
+{
+	return &m_ptn_ctx;
+}
+
+pattern_ctx* create_sensor_ctx(int case_num)
+{
+	if ((case_num >= ARRAY_SIZE(pattern_db)) || (pattern_db[case_num].config_op == NULL)) {
+		uartlog("%s:%d: error: invalid input %d\n", __func__, __LINE__, case_num);
+		return NULL;
+	}
+
+	m_ptn_ctx.phys_regs = NULL;
+	m_ptn_ctx.mem_base = DRAM_PHY_BASE;
+	m_ptn_ctx.vreg_bases = NULL;
+	m_ptn_ctx.vreg_bases_pa = NULL;
+	m_ptn_ctx.alloc_size = 0;
+	m_ptn_ctx.alloc_cnt = 0;
+
+	m_ptn_ctx.ptn = &pattern_db[case_num];
+
+	return &m_ptn_ctx;
+}
+
+void destroy_sensor_ctx(pattern_ctx *ctx)
+{
+	PTN_FREE_ALL(ctx);
+}
+
+#define IMX290_TEST_PATTERN_REG        0x308C
+#define IMX290_TEST_PTN_V_COLORBAR     0x21
+
+struct sensor_setting imx290_init_720p60_4lane[] = {
+	{0x3000, 0x01}, // STANDBY
+	{SNR_MARKER_DELAY, 3000}, // delay
+	{0x3005, 0x00}, // ADBIT 10bit
+	{0x3007, 0x10}, // VREVERS, ...
+	{0x3009, 0x01}, // Frame rate select 0-30, 1-60
+	{0x300A, 0x3C}, // BLKLEVEL
+	{0x300C, 0x00}, // WDMODE [0] 0:Normal, 1:DOL, WDSEL [5:4] 1:DOL 2 frames
+	{0x300F, 0x00},
+	{0x3010, 0x21},
+	{0x3012, 0x64},
+	{0x3014, 0x16}, // GAIN, 0x2A=>12.6dB TBD
+	{0x3016, 0x09},
+	{0x3018, 0xEE}, // VMAX[7:0]
+	{0x3019, 0x02}, // VMAX[15:8]
+	{0x301A, 0x00}, // VMAX[17:16]:=:0x301A[1:0]
+	{0x301C, 0xE4}, // HMAX[7:0], TBD
+	{0x301D, 0x1C}, // HMAX[15:8]
+	{0x3020, 0x8C}, // SHS[7:0], TBD
+	{0x3021, 0x01}, // SHS[15:8]
+	{0x3022, 0x00}, // SHS[19:16]
+	{0x3024, 0x00}, // SHS2[7:0], TBD
+	{0x3025, 0x00}, // SHS2[15:8]
+	{0x3026, 0x00}, // SHS2[19:16]
+	{0x3030, 0x00}, // RHS1[7:0], TBD
+	{0x3031, 0x00}, // RHS1[15:8]
+	{0x3032, 0x00}, // RHS1[19:16]
+	{0x3045, 0x00}, // DOLSCDEN [0] 1: pattern1 0: pattern2
+	// DOLSYDINFOEN[1] 1: embed the id code into 4th of sync
+	// code. 0: disable
+	// HINFOEN [2] 1: insert id code after 4th sync code 0: disable
+	//{0x3020, 0x30}, // SHS[7:0], TBD
+	//{0x3021, 0x00}, // SHS[15:8]
+	//{0x3022, 0x00}, // SHS[19:16]
+	{0x3046, 0xE0}, // Lane number D-2, E-4, F-8
+	{0x304B, 0x0A},
+	{0x305C, 0x20}, // INCKSEL1
+	{0x305D, 0x00}, // INCKSEL2
+	{0x305E, 0x20}, // INCKSEL3
+	{0x305F, 0x01}, // INCKSEL4
+	{0x3070, 0x02},
+	{0x3071, 0x11},
+	/*new module check*/{0x309B, 0x10},
+	/*new module check*/{0x309C, 0x22},
+	/*new module check*/{0x30A2, 0x02},
+	{0x30A6, 0x20},
+	{0x30A8, 0x20},
+	{0x30AA, 0x20},
+	{0x30AC, 0x20},
+	/*new module check*/{0x30B0, 0x43},
+	{0x3106, 0x00}, //DOLHBFIXEN[7] 0: pattern1 1: pattern2
+	/*new module check {0x310B, 0x00}*/
+	{0x3119, 0x9E},
+	/*new module check*/{0x311C, 0x1E},
+	{0x311E, 0x08},
+	{0x3128, 0x05},
+	/*new module check*/{0x3129, 0x1D},
+	/*new module check {0x3134, 0x0F}*/
+	/*new module check {0x313B, 0x50}*/
+	{0x313D, 0x83},
+	/*new module check*/{0x3150, 0x03},
+	{0x315E, 0x1A},
+	{0x3164, 0x1A},
+	/*new module check {0x317C, 0x00}*/{0x317C, 0x12},
+	/*new module check*/{0x317E, 0x00},
+	/*new module check {0x317F, 0x00}*/
+	/*new module check*/{0x31EC, 0x37},
+	{0x32B8, 0x50},
+	{0x32B9, 0x10},
+	{0x32BA, 0x00},
+	{0x32BB, 0x04},
+	{0x32C8, 0x50},
+	{0x32C9, 0x10},
+	{0x32CA, 0x00},
+	{0x32CB, 0x04},
+	{0x332C, 0xD3},
+	{0x332D, 0x10},
+	{0x332E, 0x0D},
+	{0x3358, 0x06},
+	{0x3359, 0xE1},
+	{0x335A, 0x11},
+	{0x3360, 0x1E},
+	{0x3361, 0x61},
+	{0x3362, 0x10},
+
+	/* pattern gen */
+	//{IMX290_TEST_PATTERN_REG, 0x21},
+	{IMX290_TEST_PATTERN_REG, 0x00},
+
+	/*new module check {0x33B0, 0x08}*/{0x33B0, 0x50},
+	/*new module check {0x33B1, 0x30}*/
+	/*new module check*/{0x33B2, 0x1A},
+	{0x33B3, 0x04},
+	/*new module check*/{0x3480, 0x49}, // INCKSEL7
+	{0x3000, 0x00}, // STANDBY
+	{SNR_MARKER_DELAY, 5000}, // delay
+	{0x3002, 0x00}, // XMSTA
+};
+
+struct sensor_setting imx290_init_720p30_2lane[] = {
+	{0x3000, 0x01}, // STANDBY
+	{SNR_MARKER_DELAY, 3000}, // delay
+	{0x3005, 0x00}, // ADBIT 10bit
+	{0x3007, 0x10}, // VREVERS, ...
+	{0x3009, 0x02}, //
+	{0x300A, 0x3C}, // BLKLEVEL
+	{0x300C, 0x00}, // WDMODE [0] 0:Normal, 1:DOL, WDSEL [5:4] 1:DOL 2 frames
+	{0x300F, 0x00},
+	{0x3010, 0x21},
+	{0x3012, 0x64},
+	{0x3014, 0x16}, // GAIN, 0x2A=>12.6dB TBD
+	{0x3016, 0x09},
+	{0x3018, 0xEE}, // VMAX[7:0]
+	{0x3019, 0x02}, // VMAX[15:8]
+	{0x301A, 0x00}, // VMAX[17:16]:=:0x301A[1:0]
+	{0x301C, 0xC8}, // HMAX[7:0], TBD
+	{0x301D, 0x19}, // HMAX[15:8]
+	{0x3020, 0x8C}, // SHS[7:0], TBD
+	{0x3021, 0x01}, // SHS[15:8]
+	{0x3022, 0x00}, // SHS[19:16]
+	{0x3024, 0x00}, // SHS2[7:0], TBD
+	{0x3025, 0x00}, // SHS2[15:8]
+	{0x3026, 0x00}, // SHS2[19:16]
+	{0x3030, 0x00}, // RHS1[7:0], TBD
+	{0x3031, 0x00}, // RHS1[15:8]
+	{0x3032, 0x00}, // RHS1[19:16]
+	{0x3045, 0x00}, // DOLSCDEN [0] 1: pattern1 0: pattern2
+	// DOLSYDINFOEN[1] 1: embed the id code into 4th of sync
+	// code. 0: disable
+	// HINFOEN [2] 1: insert id code after 4th sync code 0: disable
+	{0x3046, 0xD0}, // Lane number D-2, E-4, F-8
+	{0x304B, 0x0A},
+	{0x305C, 0x20}, // INCKSEL1
+	{0x305D, 0x00}, // INCKSEL2
+	{0x305E, 0x20}, // INCKSEL3
+	{0x305F, 0x01}, // INCKSEL4
+	{0x3070, 0x02},
+	{0x3071, 0x11},
+	/*new module check*/{0x309B, 0x10},
+	/*new module check*/{0x309C, 0x22},
+	/*new module check*/{0x30A2, 0x02},
+	{0x30A6, 0x20},
+	{0x30A8, 0x20},
+	{0x30AA, 0x20},
+	{0x30AC, 0x20},
+	/*new module check*/{0x30B0, 0x43},
+	{0x3106, 0x00}, //DOLHBFIXEN[7] 0: pattern1 1: pattern2
+	/*new module check {0x310B, 0x00}*/
+	{0x3119, 0x9E},
+	/*new module check*/{0x311C, 0x1E},
+	{0x311E, 0x08},
+	{0x3128, 0x05},
+	/*new module check*/{0x3129, 0x1D},
+	/*new module check {0x3134, 0x0F}*/
+	/*new module check {0x313B, 0x50}*/
+	{0x313D, 0x83},
+	/*new module check*/{0x3150, 0x03},
+	{0x315E, 0x1A},
+	{0x3164, 0x1A},
+	/*new module check {0x317C, 0x00}*/{0x317C, 0x12},
+	/*new module check*/{0x317E, 0x00},
+	/*new module check {0x317F, 0x00}*/
+	/*new module check*/{0x31EC, 0x37},
+	{0x32B8, 0x50},
+	{0x32B9, 0x10},
+	{0x32BA, 0x00},
+	{0x32BB, 0x04},
+	{0x32C8, 0x50},
+	{0x32C9, 0x10},
+	{0x32CA, 0x00},
+	{0x32CB, 0x04},
+	{0x332C, 0xD3},
+	{0x332D, 0x10},
+	{0x332E, 0x0D},
+	{0x3358, 0x06},
+	{0x3359, 0xE1},
+	{0x335A, 0x11},
+	{0x3360, 0x1E},
+	{0x3361, 0x61},
+	{0x3362, 0x10},
+
+	/* pattern gen */
+	//{IMX290_TEST_PATTERN_REG, 0x21},
+	{IMX290_TEST_PATTERN_REG, 0x00},
+
+	/*new module check {0x33B0, 0x08}*/{0x33B0, 0x50},
+	/*new module check {0x33B1, 0x30}*/
+	/*new module check*/{0x33B2, 0x1A},
+	{0x33B3, 0x04},
+	/*new module check*/{0x3480, 0x49}, // INCKSEL7
+	{0x3000, 0x00}, // STANDBY
+	{SNR_MARKER_DELAY, 5000}, // delay
+	{0x3002, 0x00}, // XMSTA
+};
+
+struct sensor_setting imx290_init_720p30_4lane[] = {
+	{0x3000, 0x01}, // STANDBY
+	{SNR_MARKER_DELAY, 3000}, // delay
+	{0x3005, 0x00}, // ADBIT 10bit
+	{0x3007, 0x10}, // VREVERS, ...
+	{0x3009, 0x02}, //
+	{0x300A, 0x3C}, // BLKLEVEL
+	{0x300C, 0x00}, // WDMODE [0] 0:Normal, 1:DOL, WDSEL [5:4] 1:DOL 2 frames
+	{0x300F, 0x00},
+	{0x3010, 0x21},
+	{0x3012, 0x64},
+	{0x3014, 0x16}, // GAIN, 0x2A=>12.6dB TBD
+	{0x3016, 0x09},
+	{0x3018, 0xEE}, // VMAX[7:0]
+	{0x3019, 0x02}, // VMAX[15:8]
+	{0x301A, 0x00}, // VMAX[17:16]:=:0x301A[1:0]
+	{0x301C, 0xC8}, // HMAX[7:0], TBD
+	{0x301D, 0x19}, // HMAX[15:8]
+	{0x3020, 0x8C}, // SHS[7:0], TBD
+	{0x3021, 0x01}, // SHS[15:8]
+	{0x3022, 0x00}, // SHS[19:16]
+	{0x3024, 0x00}, // SHS2[7:0], TBD
+	{0x3025, 0x00}, // SHS2[15:8]
+	{0x3026, 0x00}, // SHS2[19:16]
+	{0x3030, 0x00}, // RHS1[7:0], TBD
+	{0x3031, 0x00}, // RHS1[15:8]
+	{0x3032, 0x00}, // RHS1[19:16]
+	{0x3045, 0x00}, // DOLSCDEN [0] 1: pattern1 0: pattern2
+	// DOLSYDINFOEN[1] 1: embed the id code into 4th of sync
+	// code. 0: disable
+	// HINFOEN [2] 1: insert id code after 4th sync code 0: disable
+	{0x3046, 0xE0}, // Lane number D-2, E-4, F-8
+	{0x304B, 0x0A},
+	{0x305C, 0x20}, // INCKSEL1
+	{0x305D, 0x00}, // INCKSEL2
+	{0x305E, 0x20}, // INCKSEL3
+	{0x305F, 0x01}, // INCKSEL4
+	{0x3070, 0x02},
+	{0x3071, 0x11},
+	/*new module check*/{0x309B, 0x10},
+	/*new module check*/{0x309C, 0x22},
+	/*new module check*/{0x30A2, 0x02},
+	{0x30A6, 0x20},
+	{0x30A8, 0x20},
+	{0x30AA, 0x20},
+	{0x30AC, 0x20},
+	/*new module check*/{0x30B0, 0x43},
+	{0x3106, 0x00}, //DOLHBFIXEN[7] 0: pattern1 1: pattern2
+	/*new module check {0x310B, 0x00}*/
+	{0x3119, 0x9E},
+	/*new module check*/{0x311C, 0x1E},
+	{0x311E, 0x08},
+	{0x3128, 0x05},
+	/*new module check*/{0x3129, 0x1D},
+	/*new module check {0x3134, 0x0F}*/
+	/*new module check {0x313B, 0x50}*/
+	{0x313D, 0x83},
+	/*new module check*/{0x3150, 0x03},
+	{0x315E, 0x1A},
+	{0x3164, 0x1A},
+	/*new module check {0x317C, 0x00}*/{0x317C, 0x12},
+	/*new module check*/{0x317E, 0x00},
+	/*new module check {0x317F, 0x00}*/
+	/*new module check*/{0x31EC, 0x37},
+	{0x32B8, 0x50},
+	{0x32B9, 0x10},
+	{0x32BA, 0x00},
+	{0x32BB, 0x04},
+	{0x32C8, 0x50},
+	{0x32C9, 0x10},
+	{0x32CA, 0x00},
+	{0x32CB, 0x04},
+	{0x332C, 0xD3},
+	{0x332D, 0x10},
+	{0x332E, 0x0D},
+	{0x3358, 0x06},
+	{0x3359, 0xE1},
+	{0x335A, 0x11},
+	{0x3360, 0x1E},
+	{0x3361, 0x61},
+	{0x3362, 0x10},
+
+	/* pattern gen */
+	//{IMX290_TEST_PATTERN_REG, 0x21},
+	{IMX290_TEST_PATTERN_REG, 0x00},
+
+	/*new module check {0x33B0, 0x08}*/{0x33B0, 0x50},
+	/*new module check {0x33B1, 0x30}*/
+	/*new module check*/{0x33B2, 0x1A},
+	{0x33B3, 0x04},
+	/*new module check*/{0x3480, 0x49}, // INCKSEL7
+	{0x3000, 0x00}, // STANDBY
+	{SNR_MARKER_DELAY, 5000}, // delay
+	{0x3002, 0x00}, // XMSTA
+};
+
+#define IMX290_HDR1_VMAX 0x30C
+#define IMX290_HDR1_RHS 0x45
+struct sensor_setting imx290_init_720p30_2lane_hdr1[] = {
+	{0x3000, 0x01}, // STANDBY
+	{SNR_MARKER_DELAY, 3000}, // delay
+	{0x3005, 0x00}, // ADBIT 10bit
+	{0x3007, 0x10}, // VREVERS, ...
+	{0x3009, 0x02}, //
+	{0x300A, 0x3C}, // BLKLEVEL
+	{0x300C, 0x11}, // WDMODE [0] 0:Normal, 1:DOL, WDSEL [5:4] 1:DOL 2 frames
+	{0x300F, 0x00},
+	{0x3010, 0x61}, // 0x21:Normal, 0x61 Each frame gain adjustment
+	{0x3012, 0x64},
+	{0x3014, 0x16}, // GAIN, 0x2A=>12.6dB (LEF)
+	{0x3016, 0x09},
+	{0x3018, IMX290_HDR1_VMAX & 0xff}, // VMAX[7:0]
+	{0x3019, (IMX290_HDR1_VMAX >> 8) & 0xff}, // VMAX[15:8]
+	{0x301A, (IMX290_HDR1_VMAX >> 16) & 0xff}, // VMAX[17:16]:=:0x301A[1:0]
+	{0x301C, 0xC8}, // HMAX[7:0], TBD
+	{0x301D, 0x19}, // HMAX[15:8]
+	{0x3020, 0x02}, // SHS1[7:0], TBD
+	{0x3021, 0x00}, // SHS1[15:8]
+	{0x3022, 0x00}, // SHS1[19:16]
+	{0x3024, 0xDB}, // SHS2[7:0], TBD
+	{0x3025, 0x02}, // SHS2[15:8]
+	{0x3026, 0x00}, // SHS2[19:16]
+	{0x3030, IMX290_HDR1_RHS & 0xff}, // RHS1[7:0], TBD
+	{0x3031, (IMX290_HDR1_RHS >> 8) & 0xff}, // RHS1[15:8]
+	{0x3032, (IMX290_HDR1_RHS >> 16) & 0xff}, // RHS1[19:16]
+	{0x3045, 0x03}, // DOLSCDEN [0] 1: pattern1 0: pattern2
+	// DOLSYDINFOEN [1] 1: embed the id code into 4th of sync
+	// code. 0: disable
+	// HINFOEN [2] 1: insert id code after 4th sync code 0: disable
+	{0x3046, 0xD0}, // Lane number D-2, E-4, F-8
+	{0x304B, 0x0A},
+	{0x305C, 0x20}, // INCKSEL1
+	{0x305D, 0x00}, // INCKSEL2
+	{0x305E, 0x20}, // INCKSEL3
+	{0x305F, 0x01}, // INCKSEL4
+	{0x3070, 0x02},
+	{0x3071, 0x11},
+	/*new module check*/{0x309B, 0x10},
+	/*new module check*/{0x309C, 0x22},
+	/*new module check*/{0x30A2, 0x02},
+	{0x30A6, 0x20},
+	{0x30A8, 0x20},
+	{0x30AA, 0x20},
+	{0x30AC, 0x20},
+	/*new module check*/{0x30B0, 0x43},
+	{0x30F0, 0x64},
+	/*new module check {0x310B, 0x00}*/
+	//{0x3106, 0x11}, //DOLHBFIXEN[7] 0: pattern1 1: pattern2
+	{0x3106, 0x11}, //DOLHBFIXEN[7] 0: pattern1 1: pattern2
+	{0x3119, 0x9E},
+	/*new module check*/{0x311C, 0x1E},
+	{0x311E, 0x08},
+	{0x3128, 0x05},
+	/*new module check*/{0x3129, 0x1D},
+	/*new module check {0x3134, 0x0F}*/
+	/*new module check {0x313B, 0x50}*/
+	{0x313D, 0x83},
+	/*new module check*/{0x3150, 0x03},
+	{0x315E, 0x1A},
+	{0x3164, 0x1A},
+	/*new module check {0x317C, 0x00}*/{0x317C, 0x12},
+	/*new module check*/{0x317E, 0x00},
+	/*new module check {0x317F, 0x00}*/
+	/*new module check*/{0x31EC, 0x37},
+	{0x32B8, 0x50},
+	{0x32B9, 0x10},
+	{0x32BA, 0x00},
+	{0x32BB, 0x04},
+	{0x32C8, 0x50},
+	{0x32C9, 0x10},
+	{0x32CA, 0x00},
+	{0x32CB, 0x04},
+	{0x332C, 0xD3},
+	{0x332D, 0x10},
+	{0x332E, 0x0D},
+	{0x3358, 0x06},
+	{0x3359, 0xE1},
+	{0x335A, 0x11},
+	{0x3360, 0x1E},
+	{0x3361, 0x61},
+	{0x3362, 0x10},
+
+	/* pattern gen */
+	//{IMX290_TEST_PATTERN_REG, 0x21},
+	{IMX290_TEST_PATTERN_REG, 0x00},
+
+	/*new module check {0x33B0, 0x08}*/{0x33B0, 0x50},
+	/*new module check {0x33B1, 0x30}*/
+	/*new module check*/{0x33B2, 0x1A},
+	{0x33B3, 0x04},
+	/*new module check*/{0x3480, 0x49}, // INCKSEL7
+	{0x3000, 0x00}, // STANDBY
+	{SNR_MARKER_DELAY, 5000}, // delay
+	{0x3002, 0x00}, // XMSTA
+};
+
+struct sensor_setting imx290_init_720p30_2lane_hdr2[] = {
+	{0x3000, 0x01}, // STANDBY
+	{SNR_MARKER_DELAY, 3000}, // delay
+	{0x3005, 0x00}, // ADBIT 10bit
+	{0x3007, 0x10}, // VREVERS, ...
+	{0x3009, 0x02}, //
+	{0x300A, 0x3C}, // BLKLEVEL
+	{0x300C, 0x11}, // WDMODE [0] 0:Normal, 1:DOL, WDSEL [5:4] 1:DOL 2 frames
+	{0x300F, 0x00},
+	{0x3010, 0x61}, // 0x21:Normal, 0x61 Each frame gain adjustment
+	{0x3012, 0x64},
+	{0x3014, 0x16}, // GAIN, 0x2A=>12.6dB (LEF)
+	{0x3016, 0x09},
+	//{0x3018, 0xEE}, // VMAX[7:0]
+	//{0x3019, 0x02}, // VMAX[15:8]
+	//{0x301A, 0x00}, // VMAX[17:16]:=:0x301A[1:0]
+	{0x3018, IMX290_HDR1_VMAX & 0xff}, // VMAX[7:0]
+	{0x3019, (IMX290_HDR1_VMAX >> 8) & 0xff}, // VMAX[15:8]
+	{0x301A, (IMX290_HDR1_VMAX >> 16) & 0xff}, // VMAX[17:16]:=:0x301A[1:0]
+	{0x301C, 0xC8}, // HMAX[7:0], TBD
+	{0x301D, 0x19}, // HMAX[15:8]
+	{0x3020, 0x02}, // SHS1[7:0], TBD
+	{0x3021, 0x00}, // SHS1[15:8]
+	{0x3022, 0x00}, // SHS1[19:16]
+	{0x3024, 0xDB}, // SHS2[7:0], TBD
+	{0x3025, 0x02}, // SHS2[15:8]
+	{0x3026, 0x00}, // SHS2[19:16]
+	{0x3030, IMX290_HDR1_RHS & 0xff}, // RHS1[7:0], TBD
+	{0x3031, (IMX290_HDR1_RHS >> 8) & 0xff}, // RHS1[15:8]
+	{0x3032, (IMX290_HDR1_RHS >> 16) & 0xff}, // RHS1[19:16]
+	//{0x3030, 0x09}, // RHS1[7:0], TBD
+	//{0x3031, 0x00}, // RHS1[15:8]
+	//{0x3032, 0x00}, // RHS1[19:16]
+	{0x3045, 0x02}, // DOLSCDEN [0] 1: pattern1 0: pattern2
+	// DOLSYDINFOEN[1] 1: embed the id code into 4th of sync
+	// code. 0: disable
+	// HINFOEN [2] 1: insert id code after 4th sync code 0: disable
+	{0x3046, 0xD0}, // Lane number D-2, E-4, F-8
+	{0x304B, 0x0A},
+	{0x305C, 0x20}, // INCKSEL1
+	{0x305D, 0x00}, // INCKSEL2
+	{0x305E, 0x20}, // INCKSEL3
+	{0x305F, 0x01}, // INCKSEL4
+	{0x3070, 0x02},
+	{0x3071, 0x11},
+	/*new module check*/{0x309B, 0x10},
+	/*new module check*/{0x309C, 0x22},
+	/*new module check*/{0x30A2, 0x02},
+	{0x30A6, 0x20},
+	{0x30A8, 0x20},
+	{0x30AA, 0x20},
+	{0x30AC, 0x20},
+	/*new module check*/{0x30B0, 0x43},
+	{0x30F0, 0x64},
+	/*new module check {0x310B, 0x00}*/
+	{0x3106, 0x91}, //DOLHBFIXEN[7] 0: pattern1 1: pattern2
+	{0x3119, 0x9E},
+	/*new module check*/{0x311C, 0x1E},
+	{0x311E, 0x08},
+	{0x3128, 0x05},
+	/*new module check*/{0x3129, 0x1D},
+	/*new module check {0x3134, 0x0F}*/
+	/*new module check {0x313B, 0x50}*/
+	{0x313D, 0x83},
+	/*new module check*/{0x3150, 0x03},
+	{0x315E, 0x1A},
+	{0x3164, 0x1A},
+	/*new module check {0x317C, 0x00}*/{0x317C, 0x12},
+	/*new module check*/{0x317E, 0x00},
+	{0x31A0, 0x34}, // HBLANK1 720P 10bit 0x534
+	{0x31A1, 0x05},
+	/*new module check {0x317F, 0x00}*/
+	/*new module check*/{0x31EC, 0x37},
+	{0x32B8, 0x50},
+	{0x32B9, 0x10},
+	{0x32BA, 0x00},
+	{0x32BB, 0x04},
+	{0x32C8, 0x50},
+	{0x32C9, 0x10},
+	{0x32CA, 0x00},
+	{0x32CB, 0x04},
+	{0x332C, 0xD3},
+	{0x332D, 0x10},
+	{0x332E, 0x0D},
+	{0x3358, 0x06},
+	{0x3359, 0xE1},
+	{0x335A, 0x11},
+	{0x3360, 0x1E},
+	{0x3361, 0x61},
+	{0x3362, 0x10},
+
+	/* pattern gen */
+	//{IMX290_TEST_PATTERN_REG, 0x21},
+	{IMX290_TEST_PATTERN_REG, 0x00},
+
+	/*new module check {0x33B0, 0x08}*/{0x33B0, 0x50},
+	/*new module check {0x33B1, 0x30}*/
+	/*new module check*/{0x33B2, 0x1A},
+	{0x33B3, 0x04},
+	/*new module check*/{0x3480, 0x49}, // INCKSEL7
+	{0x3000, 0x00}, // STANDBY
+	{SNR_MARKER_DELAY, 5000}, // delay
+	{0x3002, 0x00}, // XMSTA
+};
+
+static int imx290_poweron(void *priv)
+{
+	pattern_ctx *ctx = (pattern_ctx *)priv;
+	struct sensor_info *sinf = (struct sensor_info *)ctx->ptn->priv;
+	struct snr_i2c_adapter *adpt = NULL;
+	struct sensor_setting *sensor_set = imx290_init_720p60_4lane;
+	int setting_num = ARRAY_SIZE(imx290_init_720p60_4lane);
+	struct sensor_setting *pset;
+	struct sensor_mode *mode = &imx290_mode[IMX290_MODE_720P60];
+	char cmdbuf[8];
+	int i, r, test_pn = 0;
+	uint32_t value;
+
+	if (sensor_mode) {
+		switch (sensor_mode) {
+		case 1:
+			mode = &imx290_mode[IMX290_MODE_720P30];
+			sensor_set = imx290_init_720p30_2lane;
+			setting_num = ARRAY_SIZE(imx290_init_720p30_2lane);
+			uartlog("use 720p30 2 lanes\n");
+			sinf->ishdr = false;
+			sinf->shsl.min = 1;
+			sinf->shsl.max = 0x2EC;
+			break;
+		case 2:
+			mode = &imx290_mode[IMX290_MODE_720P30];
+			sensor_set = imx290_init_720p30_4lane;
+			setting_num = ARRAY_SIZE(imx290_init_720p30_4lane);
+			uartlog("use 720p30 4 lanes\n");
+			sinf->ishdr = false;
+			sinf->shsl.min = 1;
+			sinf->shsl.max = 0x2EC;
+			break;
+		case 3:
+			mode = &imx290_mode[IMX290_MODE_720P15_HDR1];
+			sensor_set = imx290_init_720p30_2lane_hdr1;
+			setting_num = ARRAY_SIZE(imx290_init_720p30_2lane_hdr1);
+			uartlog("use 720p30 2 lanes HDR Pattern 1\n");
+			sinf->ishdr = true;
+			sinf->shsl.min = IMX290_HDR1_RHS + 2;
+			sinf->shsl.max = IMX290_HDR1_VMAX*2 - 2;
+			sinf->shss.min = 2;
+			sinf->shss.max = IMX290_HDR1_RHS - 2;
+			break;
+		case 4:
+			mode = &imx290_mode[IMX290_MODE_720P15_HDR2];
+			sensor_set = imx290_init_720p30_2lane_hdr2;
+			setting_num = ARRAY_SIZE(imx290_init_720p30_2lane_hdr2);
+			uartlog("use 720p30 2 lanes HDR Pattern 2\n");
+			sinf->ishdr = true;
+			sinf->shsl.min = IMX290_HDR1_RHS + 2;
+			sinf->shsl.max = IMX290_HDR1_VMAX*2 - 2;
+			sinf->shss.min = 2;
+			sinf->shss.max = IMX290_HDR1_RHS - 2;
+			break;
+		default:
+			uartlog("use 720p60 4 lanes\n");
+			break;
+		}
+	}
+	cmdbuf[0] = cmdbuf[1] = '0';
+	cli_readline("enable test pattern? [n/y]", cmdbuf);
+	if (cmdbuf[0] == 'y') {
+		test_pn = 1;
+	}
+	// i2c config here
+	snr_bm_i2c_get_adap((void *)&adpt);
+	sinf->adpt = adpt;
+
+	adpt->slaveaddr = sinf->dev;
+	snr_bm_i2c_init(adpt);
+
+	// i2c initial sequence
+	for (i = 0; i < setting_num; i++) {
+		pset = &(sensor_set[i]);
+
+		if (pset->addr == SNR_MARKER_DELAY) {
+			uartlog("sensor wr delay\n");
+			udelay(pset->val);
+			continue;
+		}
+		if (pset->addr == IMX290_TEST_PATTERN_REG) {
+			if (test_pn)
+				pset->val = IMX290_TEST_PTN_V_COLORBAR;
+			else
+				pset->val = 0;
+		}
+		r = sinf->adpt->write(sinf->adpt, sinf->dev, pset->addr, sinf->alen, (uint8_t*)&(pset->val), 1);
+		if (r < 0)
+			uartlog("%s i2c_write fail addr[0x%x]\n", ctx->ptn->name, pset->addr);
+	}
+
+	uartlog("Read back i2c registers:\n");
+	for (i = 0; i < setting_num; i++) {
+		uint8_t val[2] = {0xFF};
+
+		pset = &(sensor_set[i]);
+
+		r = sinf->adpt->read(sinf->adpt, sinf->dev, pset->addr, sinf->alen, (uint8_t*)&(val[0]), 1);
+
+		uartlog("reg[0x%x]=0x%x(0x%x)\n", pset->addr, val[0], pset->val);
+	}
+
+#if defined(CIF_DPHY_ENABLE)
+	// Switch the PHY type to SUBLVDS
+	value = readl(0x0300B0F0);
+	value &= 0xFFFF0000;
+	writel(0x0300B0F0, value);
+	value |= 0x37;
+	writel(0x0300B0F0, value);
+#endif
+	uartlog("streaming start\n");
+
+	cmdbuf[0] = cmdbuf[1] = '0';
+	cli_readline("run sensor to dram flow? [n/y]", cmdbuf);
+	if (cmdbuf[0] == 'y') {
+		uartlog("dump %d x %d \n", mode->total_w, mode->total_h);
+		config_csibdg(mode->total_w, mode->total_h, ctx,
+			      (sensor_mode == 3 || sensor_mode == 4), 0);
+	}
+
+	return 0;
+}
+
+struct sensor_setting imx078_init_720p[] = {
+	{0x00, 0x02}, /* STANDBY */
+	{SNR_MARKER_DELAY, 3000}, /* delay >1ms */
+	{0x00, 0x00}, /* STANDBY */
+	{0x5C, 0x01}, /* DCKRST */
+	{0x0A, 0x10}, /* CLPSQRST */
+	{SNR_MARKER_DELAY, 1000}, /* delay */
+	{0x01, 0x33}, /* STBLVDS, CHSEL */
+	{0x02, 0x00}, /* SVR: expo shutdown v period */
+	{0x03, 0x00}, /* SVR */
+	{0x04, 0x00}, /* SPL: expo start v period */
+	{0x05, 0x00}, /* SPL */
+	{0x06, 0x20}, /* SHR: expo start h period */
+	{0x07, 0x01}, /* SHR */
+	{0x08, 0x40}, /* PGC: analog gain */
+	{0x09, 0x01}, /* PGC */
+	{0x0D, 0x03}, /* Readout mode 7:1/5 elim */
+	{0x0E, 0x00}, /* 0: rolling 1: global shutter*/
+	{0x0F, 0x10}, /* BLKLEVEL */
+	{0x10, 0x01}, /* Digital gain */
+	{0x17, 0x00}, /* RDHMD, GSVR */
+	/* {0x18, 0x45}, INCK x2/x4 DDR output */
+	{0x19, 0x00}, /* ADBIT 9/10/12bits */
+	/* {0x4C, 0x70}, PLSTMG04 */
+	/* {0x4D, 0x70}, PLSTMG05 */
+	{0x69, 0x00}, /* Hor 2/4 elim mode setting */
+	/* {0x0330, 0x01}, PLSTMG07 */
+	{}
+};
+
+static int imx078_poweron(void *priv)
+{
+	pattern_ctx *ctx = (pattern_ctx *)priv;
+	struct sensor_info *sinf = (struct sensor_info *)ctx->ptn->priv;
+	struct snr_spi_adapter *adpt = NULL;
+	struct sensor_setting *pset;
+	int i, r;
+
+	// i2c config here
+	adpt = snr_bm_spi_get_adpt(NULL);
+	sinf->spi_adpt = adpt;
+
+	adpt->init(adpt, sinf->dev, sinf->alen, 1);
+
+	// i2c initial sequence
+	for (i = 0; i < ARRAY_SIZE(imx078_init_720p); i++) {
+		pset = &(imx078_init_720p[i]);
+
+		if (pset->addr == SNR_MARKER_DELAY) {
+			uartlog("sensor wr delay\n");
+			udelay(pset->val);
+			continue;
+		}
+		r = sinf->spi_adpt->write(sinf->spi_adpt, pset->addr, (uint8_t*)&(pset->val), 1);
+		uartlog("write reg[0x%x]=0x%x\n", pset->addr, pset->val);
+		if (r < 0)
+			uartlog("%s i2c_write fail addr[0x%x]\n", ctx->ptn->name, pset->addr);
+	}
+
+	uartlog("streaming start\n");
+
+	return 0;
+}
+
+static void sensor_data_convert(struct sensor_setting *data, int size)
+{
+	struct sensor_setting *s;
+	int i;
+
+	for (i = 0, s = data; i < size; i++, s++) {
+		uint16_t tmp = ((s->val & 0xFF) << 8) | (s->val >> 8);
+		s->val = tmp;
+	}
+}
+
+#define DATA_SHORT_INVERT(x)           (((x>>8) & 0xFF) | ((x&0xFF)<<8))
+
+#define AR0237_TEST_PATTERN_REG        0x3070
+#define AR0237_TEST_PTN_SLOID          0x0001
+#define AR0237_TEST_PTN_V_COLORBAR     0x0002
+#define AR0237_TEST_PTN_GRAY           0x0003
+
+#define AR0237_HISPI_CONTROL_REG       0x31C6
+#define AR0237_HISPI_CTL_PKT_SP_LSB    0x0400
+#define AR0237_HISPI_CTL_STM_SP_LSB    0x0404
+
+#define AR0237_HISPI_DATA_PATH_SEL_REG 0x306E
+#define AR0237_HISPI_PK_SP_MODE        0x9218
+
+struct sensor_setting ar0237_init_720p_4lane[] = {
+	{0x301A, 0x0001}, // RESET_REGISTER
+	{SNR_MARKER_DELAY, 200}, /* delay */
+
+//Linear_mode_sequencer
+	{0x3088, 0x8000}, // SEQ_CTRL_PORT
+	{0x3086, 0x4558}, // SEQ_DATA_PORT
+	{0x3086, 0x72A6}, // SEQ_DATA_PORT
+	{0x3086, 0x4A31}, // SEQ_DATA_PORT
+	{0x3086, 0x4342}, // SEQ_DATA_PORT
+	{0x3086, 0x8E03}, // SEQ_DATA_PORT
+	{0x3086, 0x2A14}, // SEQ_DATA_PORT
+	{0x3086, 0x4578}, // SEQ_DATA_PORT
+	{0x3086, 0x7B3D}, // SEQ_DATA_PORT
+	{0x3086, 0xFF3D}, // SEQ_DATA_PORT
+	{0x3086, 0xFF3D}, // SEQ_DATA_PORT
+	{0x3086, 0xEA2A}, // SEQ_DATA_PORT
+	{0x3086, 0x043D}, // SEQ_DATA_PORT
+	{0x3086, 0x102A}, // SEQ_DATA_PORT
+	{0x3086, 0x052A}, // SEQ_DATA_PORT
+	{0x3086, 0x1535}, // SEQ_DATA_PORT
+	{0x3086, 0x2A05}, // SEQ_DATA_PORT
+	{0x3086, 0x3D10}, // SEQ_DATA_PORT
+	{0x3086, 0x4558}, // SEQ_DATA_PORT
+	{0x3086, 0x2A04}, // SEQ_DATA_PORT
+	{0x3086, 0x2A14}, // SEQ_DATA_PORT
+	{0x3086, 0x3DFF}, // SEQ_DATA_PORT
+	{0x3086, 0x3DFF}, // SEQ_DATA_PORT
+	{0x3086, 0x3DEA}, // SEQ_DATA_PORT
+	{0x3086, 0x2A04}, // SEQ_DATA_PORT
+	{0x3086, 0x622A}, // SEQ_DATA_PORT
+	{0x3086, 0x288E}, // SEQ_DATA_PORT
+	{0x3086, 0x0036}, // SEQ_DATA_PORT
+	{0x3086, 0x2A08}, // SEQ_DATA_PORT
+	{0x3086, 0x3D64}, // SEQ_DATA_PORT
+	{0x3086, 0x7A3D}, // SEQ_DATA_PORT
+	{0x3086, 0x0444}, // SEQ_DATA_PORT
+	{0x3086, 0x2C4B}, // SEQ_DATA_PORT
+	{0x3086, 0xA403}, // SEQ_DATA_PORT
+	{0x3086, 0x430D}, // SEQ_DATA_PORT
+	{0x3086, 0x2D46}, // SEQ_DATA_PORT
+	{0x3086, 0x4316}, // SEQ_DATA_PORT
+	{0x3086, 0x2A90}, // SEQ_DATA_PORT
+	{0x3086, 0x3E06}, // SEQ_DATA_PORT
+	{0x3086, 0x2A98}, // SEQ_DATA_PORT
+	{0x3086, 0x5F16}, // SEQ_DATA_PORT
+	{0x3086, 0x530D}, // SEQ_DATA_PORT
+	{0x3086, 0x1660}, // SEQ_DATA_PORT
+	{0x3086, 0x3E4C}, // SEQ_DATA_PORT
+	{0x3086, 0x2904}, // SEQ_DATA_PORT
+	{0x3086, 0x2984}, // SEQ_DATA_PORT
+	{0x3086, 0x8E03}, // SEQ_DATA_PORT
+	{0x3086, 0x2AFC}, // SEQ_DATA_PORT
+	{0x3086, 0x5C1D}, // SEQ_DATA_PORT
+	{0x3086, 0x5754}, // SEQ_DATA_PORT
+	{0x3086, 0x495F}, // SEQ_DATA_PORT
+	{0x3086, 0x5305}, // SEQ_DATA_PORT
+	{0x3086, 0x5307}, // SEQ_DATA_PORT
+	{0x3086, 0x4D2B}, // SEQ_DATA_PORT
+	{0x3086, 0xF810}, // SEQ_DATA_PORT
+	{0x3086, 0x164C}, // SEQ_DATA_PORT
+	{0x3086, 0x0955}, // SEQ_DATA_PORT
+	{0x3086, 0x562B}, // SEQ_DATA_PORT
+	{0x3086, 0xB82B}, // SEQ_DATA_PORT
+	{0x3086, 0x984E}, // SEQ_DATA_PORT
+	{0x3086, 0x1129}, // SEQ_DATA_PORT
+	{0x3086, 0x9460}, // SEQ_DATA_PORT
+	{0x3086, 0x5C19}, // SEQ_DATA_PORT
+	{0x3086, 0x5C1B}, // SEQ_DATA_PORT
+	{0x3086, 0x4548}, // SEQ_DATA_PORT
+	{0x3086, 0x4508}, // SEQ_DATA_PORT
+	{0x3086, 0x4588}, // SEQ_DATA_PORT
+	{0x3086, 0x29B6}, // SEQ_DATA_PORT
+	{0x3086, 0x8E01}, // SEQ_DATA_PORT
+	{0x3086, 0x2AF8}, // SEQ_DATA_PORT
+	{0x3086, 0x3E02}, // SEQ_DATA_PORT
+	{0x3086, 0x2AFA}, // SEQ_DATA_PORT
+	{0x3086, 0x3F09}, // SEQ_DATA_PORT
+	{0x3086, 0x5C1B}, // SEQ_DATA_PORT
+	{0x3086, 0x29B2}, // SEQ_DATA_PORT
+	{0x3086, 0x3F0C}, // SEQ_DATA_PORT
+	{0x3086, 0x3E03}, // SEQ_DATA_PORT
+	{0x3086, 0x3E15}, // SEQ_DATA_PORT
+	{0x3086, 0x5C13}, // SEQ_DATA_PORT
+	{0x3086, 0x3F11}, // SEQ_DATA_PORT
+	{0x3086, 0x3E0F}, // SEQ_DATA_PORT
+	{0x3086, 0x5F2B}, // SEQ_DATA_PORT
+	{0x3086, 0x902B}, // SEQ_DATA_PORT
+	{0x3086, 0x803E}, // SEQ_DATA_PORT
+	{0x3086, 0x062A}, // SEQ_DATA_PORT
+	{0x3086, 0xF23F}, // SEQ_DATA_PORT
+	{0x3086, 0x103E}, // SEQ_DATA_PORT
+	{0x3086, 0x0160}, // SEQ_DATA_PORT
+	{0x3086, 0x29A2}, // SEQ_DATA_PORT
+	{0x3086, 0x29A3}, // SEQ_DATA_PORT
+	{0x3086, 0x5F4D}, // SEQ_DATA_PORT
+	{0x3086, 0x1C2A}, // SEQ_DATA_PORT
+	{0x3086, 0xFA29}, // SEQ_DATA_PORT
+	{0x3086, 0x8345}, // SEQ_DATA_PORT
+	{0x3086, 0xA83E}, // SEQ_DATA_PORT
+	{0x3086, 0x072A}, // SEQ_DATA_PORT
+	{0x3086, 0xFB3E}, // SEQ_DATA_PORT
+	{0x3086, 0x2945}, // SEQ_DATA_PORT
+	{0x3086, 0x8824}, // SEQ_DATA_PORT
+	{0x3086, 0x3E08}, // SEQ_DATA_PORT
+	{0x3086, 0x2AFA}, // SEQ_DATA_PORT
+	{0x3086, 0x5D29}, // SEQ_DATA_PORT
+	{0x3086, 0x9288}, // SEQ_DATA_PORT
+	{0x3086, 0x102B}, // SEQ_DATA_PORT
+	{0x3086, 0x048B}, // SEQ_DATA_PORT
+	{0x3086, 0x1686}, // SEQ_DATA_PORT
+	{0x3086, 0x8D48}, // SEQ_DATA_PORT
+	{0x3086, 0x4D4E}, // SEQ_DATA_PORT
+	{0x3086, 0x2B80}, // SEQ_DATA_PORT
+	{0x3086, 0x4C0B}, // SEQ_DATA_PORT
+	{0x3086, 0x3F36}, // SEQ_DATA_PORT
+	{0x3086, 0x2AF2}, // SEQ_DATA_PORT
+	{0x3086, 0x3F10}, // SEQ_DATA_PORT
+	{0x3086, 0x3E01}, // SEQ_DATA_PORT
+	{0x3086, 0x6029}, // SEQ_DATA_PORT
+	{0x3086, 0x8229}, // SEQ_DATA_PORT
+	{0x3086, 0x8329}, // SEQ_DATA_PORT
+	{0x3086, 0x435C}, // SEQ_DATA_PORT
+	{0x3086, 0x155F}, // SEQ_DATA_PORT
+	{0x3086, 0x4D1C}, // SEQ_DATA_PORT
+	{0x3086, 0x2AFA}, // SEQ_DATA_PORT
+	{0x3086, 0x4558}, // SEQ_DATA_PORT
+	{0x3086, 0x8E00}, // SEQ_DATA_PORT
+	{0x3086, 0x2A98}, // SEQ_DATA_PORT
+	{0x3086, 0x3F0A}, // SEQ_DATA_PORT
+	{0x3086, 0x4A0A}, // SEQ_DATA_PORT
+	{0x3086, 0x4316}, // SEQ_DATA_PORT
+	{0x3086, 0x0B43}, // SEQ_DATA_PORT
+	{0x3086, 0x168E}, // SEQ_DATA_PORT
+	{0x3086, 0x032A}, // SEQ_DATA_PORT
+	{0x3086, 0x9C45}, // SEQ_DATA_PORT
+	{0x3086, 0x783F}, // SEQ_DATA_PORT
+	{0x3086, 0x072A}, // SEQ_DATA_PORT
+	{0x3086, 0x9D3E}, // SEQ_DATA_PORT
+	{0x3086, 0x305D}, // SEQ_DATA_PORT
+	{0x3086, 0x2944}, // SEQ_DATA_PORT
+	{0x3086, 0x8810}, // SEQ_DATA_PORT
+	{0x3086, 0x2B04}, // SEQ_DATA_PORT
+	{0x3086, 0x530D}, // SEQ_DATA_PORT
+	{0x3086, 0x4558}, // SEQ_DATA_PORT
+	{0x3086, 0x3E08}, // SEQ_DATA_PORT
+	{0x3086, 0x8E01}, // SEQ_DATA_PORT
+	{0x3086, 0x2A98}, // SEQ_DATA_PORT
+	{0x3086, 0x8E00}, // SEQ_DATA_PORT
+	{0x3086, 0x76A7}, // SEQ_DATA_PORT
+	{0x3086, 0x77A7}, // SEQ_DATA_PORT
+	{0x3086, 0x4644}, // SEQ_DATA_PORT
+	{0x3086, 0x1616}, // SEQ_DATA_PORT
+	{0x3086, 0xA57A}, // SEQ_DATA_PORT
+	{0x3086, 0x1244}, // SEQ_DATA_PORT
+	{0x3086, 0x4B18}, // SEQ_DATA_PORT
+	{0x3086, 0x4A04}, // SEQ_DATA_PORT
+	{0x3086, 0x4316}, // SEQ_DATA_PORT
+	{0x3086, 0x0643}, // SEQ_DATA_PORT
+	{0x3086, 0x1605}, // SEQ_DATA_PORT
+	{0x3086, 0x4316}, // SEQ_DATA_PORT
+	{0x3086, 0x0743}, // SEQ_DATA_PORT
+	{0x3086, 0x1658}, // SEQ_DATA_PORT
+	{0x3086, 0x4316}, // SEQ_DATA_PORT
+	{0x3086, 0x5A43}, // SEQ_DATA_PORT
+	{0x3086, 0x1645}, // SEQ_DATA_PORT
+	{0x3086, 0x588E}, // SEQ_DATA_PORT
+	{0x3086, 0x032A}, // SEQ_DATA_PORT
+	{0x3086, 0x9C45}, // SEQ_DATA_PORT
+	{0x3086, 0x787B}, // SEQ_DATA_PORT
+	{0x3086, 0x3F07}, // SEQ_DATA_PORT
+	{0x3086, 0x2A9D}, // SEQ_DATA_PORT
+	{0x3086, 0x530D}, // SEQ_DATA_PORT
+	{0x3086, 0x8B16}, // SEQ_DATA_PORT
+	{0x3086, 0x863E}, // SEQ_DATA_PORT
+	{0x3086, 0x2345}, // SEQ_DATA_PORT
+	{0x3086, 0x5825}, // SEQ_DATA_PORT
+	{0x3086, 0x3E10}, // SEQ_DATA_PORT
+	{0x3086, 0x8E01}, // SEQ_DATA_PORT
+	{0x3086, 0x2A98}, // SEQ_DATA_PORT
+	{0x3086, 0x8E00}, // SEQ_DATA_PORT
+	{0x3086, 0x3E10}, // SEQ_DATA_PORT
+	{0x3086, 0x8D60}, // SEQ_DATA_PORT
+	{0x3086, 0x1244}, // SEQ_DATA_PORT
+	{0x3086, 0x4BB9}, // SEQ_DATA_PORT
+	{0x3086, 0x2C2C}, // SEQ_DATA_PORT
+	{0x3086, 0x2C2C}, // SEQ_DATA_PORT
+	{0x3086, 0x2C2C}, // SEQ_DATA_PORT
+
+//PLL_settings
+	{0x31AC, 0x0A0A}, // DATA_FORMAT_BITS
+	{0x302A, 0x000A}, // VT_PIX_CLK_DIV
+	{0x302C, 0x0001}, // VT_SYS_CLK_DIV
+	{0x302E, 0x000A}, // PRE_PLL_CLK_DIV
+	{0x3030, 0x00A0}, // PLL_MULTIPLIER
+	{0x3036, 0x000A}, // OP_PIX_CLK_DIV
+	{0x3038, 0x0002}, // OP_SYS_CLK_DIV
+
+//Output resolution
+	{0x3002, 0x00B8}, //Y_ADDR_START = 184
+	{0x3004, 0x014C}, //X_ADDR_START = 332
+	{0x3006, 0x0387}, //Y_ADDR_END = 903
+	{0x3008, 0x064B}, //X_ADDR_END = 1611
+
+//Timing
+	{0x300A, 0x04BA}, // FRAME_LENGTH_LINES
+	{0x300C, 0x0898}, // LINE_LENGTH_PCK ori:4C8
+	{0x3012, 0x0200}, // COARSE_INTEGRATION_TIME
+	{0x30A2, 0x0001}, // X_ODD_INC
+	{0x30A6, 0x0001}, // Y_ODD_INC
+	{0x30AE, 0x0001}, // X_ODD_INC_CB
+	{0x30A8, 0x0001}, // Y_ODD_INC_CB
+	{0x3040, 0x0000}, // READ_MODE
+	{0x3082, 0x0009}, // OPERATION_MODE_CTRL
+	{0x3100, 0x0000}, // AECTRLREG
+	{0x31D0, 0x0000}, // COMPANDING
+
+//Default_Settings_5_Oct
+	{0x3064, 0x1802}, // SMIA_TEST
+	{0x3EEE, 0xA0AA}, // DAC_LD_34_35
+	{0x3F4A, 0x0F70}, // DELTA_DK_PIX_THRES
+	{0x309E, 0x016C}, // HIDY_PROG_START_ADDR
+	{0x3092, 0x006F}, // ROW_NOISE_CONTROL
+	{0x3EE4, 0x9937}, // DAC_LD_24_25
+	{0x3EE6, 0x3863}, // DAC_LD_26_27
+	{0x3EEC, 0x3B0C}, // DAC_LD_32_33
+	{0x30B0, 0x1A3A}, // DIGITAL_TEST
+	{0x30BA, 0x762C}, // DIGITAL_CTRL
+	{0x3EEA, 0x283C}, // DAC_LD_30_31
+	{0x3ECC, 0x4E2D}, // DAC_LD_0_1
+	{0x3ED2, 0xFEA6}, // DAC_LD_6_7
+	{0x3ED6, 0x2CB3}, // DAC_LD_10_11
+	{0x3EEA, 0x2819}, // DAC_LD_30_31
+
+	{0x31AE, 0x0304}, // SERIAL_FORMAT 302: 2 lanes, 304: 4lanes
+	{AR0237_HISPI_CONTROL_REG, AR0237_HISPI_CTL_PKT_SP_LSB}, // HISPI_CONTROL_STATUS [1] :0 - LSB, 1 - MSB
+	{0x306E, 0x9210}, // DATAPATH_SELECT
+
+	{AR0237_TEST_PATTERN_REG, 0}, // Test Pattern
+
+	{0x301A, 0x005C}, // RESET_REGISTER
+	{}
+};
+
+struct sensor_setting ar0237_init_720p_hdr_4lane[] = {
+	{0x301A, 0x0001}, // RESET_REGISTER
+	{SNR_MARKER_DELAY, 200}, /* delay */
+//PLL_settings
+	{0x31AC, 0x0A0A}, // DATA_FORMAT_BITS
+	{0x302A, 0x000A}, // VT_PIX_CLK_DIV
+	{0x302C, 0x0001}, // VT_SYS_CLK_DIV
+	{0x302E, 0x000A}, // PRE_PLL_CLK_DIV
+	{0x3030, 0x00A0}, // PLL_MULTIPLIER
+	{0x3036, 0x000A}, // OP_PIX_CLK_DIV
+	{0x3038, 0x0002}, // OP_SYS_CLK_DIV
+
+//Output resolution
+	{0x3002, 0x00B8}, //Y_ADDR_START = 184
+	{0x3004, 0x014C}, //X_ADDR_START = 332
+	{0x3006, 0x0387}, //Y_ADDR_END = 903
+	{0x3008, 0x064B}, //X_ADDR_END = 1611
+
+//Timing
+	{0x300A, 0x04BA}, // FRAME_LENGTH_LINES
+	{0x300C, 0x1100}, // LINE_LENGTH_PCK ori:4C8
+	{0x3012, 0x0416}, // COARSE_INTEGRATION_TIME
+	{0x30A2, 0x0001}, // X_ODD_INC
+	{0x30A6, 0x0001}, // Y_ODD_INC
+	{0x30AE, 0x0001}, // X_ODD_INC_CB
+	{0x30A8, 0x0001}, // Y_ODD_INC_CB
+	{0x3040, 0x0000}, // READ_MODE
+	{0x3082, 0x0009}, // OPERATION_MODE_CTRL
+	{0x3100, 0x0400}, // AECTRLREG
+	{0x31D0, 0x0000}, // COMPANDING
+
+//Default_Settings_5_Oct
+	{0x3064, 0x1802}, // SMIA_TEST
+	{0x3EEE, 0xA0AA}, // DAC_LD_34_35
+	{0x3F4A, 0x0F70}, // DELTA_DK_PIX_THRES
+	{0x309E, 0x016C}, // HIDY_PROG_START_ADDR
+	{0x3092, 0x006F}, // ROW_NOISE_CONTROL
+	{0x3EE4, 0x9937}, // DAC_LD_24_25
+	{0x3EE6, 0x3863}, // DAC_LD_26_27
+	{0x3EEC, 0x3B0C}, // DAC_LD_32_33
+	{0x30B0, 0x1A3A}, // DIGITAL_TEST
+	{0x30BA, 0x762C}, // DIGITAL_CTRL
+	{0x3EEA, 0x283C}, // DAC_LD_30_31
+	{0x3ECC, 0x4E2D}, // DAC_LD_0_1
+	{0x3ED2, 0xFEA6}, // DAC_LD_6_7
+	{0x3ED6, 0x2CB3}, // DAC_LD_10_11
+	{0x3EEA, 0x2819}, // DAC_LD_30_31
+
+	{0x31AE, 0x0304}, // SERIAL_FORMAT 302: 2 lanes, 304: 4lanes
+	{AR0237_HISPI_CONTROL_REG, AR0237_HISPI_CTL_PKT_SP_LSB}, // HISPI_CONTROL_STATUS [1] :0 - LSB, 1 - MSB
+	{0x306E, 0x9210}, // DATAPATH_SELECT
+
+	{0x31AC, 0x100A},
+	{0x318E, 0x1000},
+	{0x3082, 0x0800}, // [1:0] image mode. [3:2] fixed exp ratio. [11] seperately T1, T2.
+	{0x30B0, 0x0A3A},
+	{0x3212, 300}, // COARSE_INTEGRATION_TIME2
+	{AR0237_TEST_PATTERN_REG, 0}, // Test Pattern
+
+	{0x301A, 0x005C}, // RESET_REGISTER
+	{}
+};
+
+static int ar0237_poweron(void *priv)
+{
+	pattern_ctx *ctx = (pattern_ctx *)priv;
+	struct sensor_info *sinf = (struct sensor_info *)ctx->ptn->priv;
+	struct snr_i2c_adapter *adpt = NULL;
+	struct sensor_setting *sensor_set = ar0237_init_720p_4lane;
+	int setting_num = ARRAY_SIZE(ar0237_init_720p_4lane);
+	struct sensor_setting *pset;
+	struct sensor_mode *mode = &ar0237_mode[AR0237_MODE_720P30];
+	int i, r, test_pn = 0, stm_sp = 0, hdr = 0;
+	char cmdbuf[8];
+	uint32_t value;
+
+	// i2c config here
+	snr_bm_i2c_get_adap((void *)&adpt);
+	sinf->adpt = adpt;
+
+	adpt->slaveaddr = sinf->dev;
+	snr_bm_i2c_init(adpt);
+
+	cmdbuf[0] = cmdbuf[1] = '0';
+	cli_readline("enable test pattern? [n/y]", cmdbuf);
+	if (cmdbuf[0] == 'y') {
+		test_pn = 1;
+	}
+
+	cmdbuf[0] = cmdbuf[1] = '0';
+	cli_readline("Enable HDR? [n/y]", cmdbuf);
+	if (cmdbuf[0] == 'y') {
+		sensor_set = ar0237_init_720p_hdr_4lane;
+		setting_num = ARRAY_SIZE(ar0237_init_720p_hdr_4lane);
+		hdr = 1;
+	} else {
+		sensor_set = ar0237_init_720p_4lane;
+		setting_num = ARRAY_SIZE(ar0237_init_720p_4lane);
+		hdr = 0;
+	}
+	// convert sensor data
+	sensor_data_convert(sensor_set, setting_num);
+	cmdbuf[0] = cmdbuf[1] = '0';
+	cli_readline("HISPI- [0 Packetized-SP/1 Streaming-SP]: ", cmdbuf);
+	if (cmdbuf[0] == '1') {
+		stm_sp = 1;
+		// [TODO] Config Stream-SP SOV
+		writel(0x0a0c2208, 0x09000000);
+		writel(0x0a0c2258, (readl(0x0a0c2258) & ~0x3FFF) | ((mode->total_w>>2) & 0x3FFF));
+		writel(0x0a0c2260, readl(0x0a0c2260) | 0x02);
+		if (hdr) {
+			// Config MAC HDR VSIZE and SHIFT(T2)
+			writel(0x0a0c2044, (720<<16) | 302);
+			// Enable HDR manual mode, hdr output inverse and S-SP HDR mode.
+			writel(0x0a0c2040, 0x111);
+		} else {
+			writel(0x0a0c2040, 0x0);
+		}
+	} else {
+		writel(0x0a0c2260, readl(0x0a0c2260) & ~0x02);
+		if (hdr) {
+			mode = &ar0237_mode[AR0237_MODE_720P30_PKT_SP_HDR];
+			value = readl(0x0a0c2260);
+			value |= 0x10;
+			writel(0x0a0c2260, value);
+		}
+	}
+
+	// i2c initial sequence
+	for (i = 0; i < setting_num; i++) {
+		pset = &(sensor_set[i]);
+
+		if (pset->addr == SNR_MARKER_DELAY) {
+			uartlog("sensor wr delay\n");
+			udelay(pset->val);
+			continue;
+		}
+		if (pset->addr == AR0237_TEST_PATTERN_REG) {
+			if (test_pn)
+				pset->val = DATA_SHORT_INVERT(AR0237_TEST_PTN_GRAY);
+			else
+				pset->val = 0;
+		}
+		if (pset->addr == AR0237_HISPI_CONTROL_REG) {
+			if (stm_sp)
+				pset->val = DATA_SHORT_INVERT(AR0237_HISPI_CTL_STM_SP_LSB);
+			else
+				pset->val = DATA_SHORT_INVERT(AR0237_HISPI_CTL_PKT_SP_LSB);
+		}
+		if (pset->addr == AR0237_HISPI_DATA_PATH_SEL_REG) {
+			if (hdr && !stm_sp)
+				pset->val = DATA_SHORT_INVERT(AR0237_HISPI_PK_SP_MODE);
+		}
+		r = sinf->adpt->write(sinf->adpt, sinf->dev, pset->addr, sinf->alen, (uint8_t*)&(pset->val), 2);
+		if (r < 0)
+			uartlog("%s i2c_write fail addr[0x%x]\n", ctx->ptn->name, pset->addr);
+	}
+
+	uartlog("Read back i2c registers:\n");
+	for (i = 0; i < setting_num; i++) {
+		uint16_t val = 0;
+
+		pset = &(sensor_set[i]);
+		// skip SEQ_DATA_PORT
+		if (pset->addr == 0x3086)
+			continue;
+		r = sinf->adpt->read(sinf->adpt, sinf->dev, pset->addr, sinf->alen, (uint8_t*)&val, 2);
+
+		uartlog("reg[0x%x]=0x%x(0x%x)\n", pset->addr, val, pset->val);
+	}
+
+#if defined(CIF_DPHY_ENABLE)
+	// Switch the PHY type to HISPI
+	value = readl(0x0300B0F0);
+	value &= 0xFFFF0000;
+	writel(0x0300B0F0, value);
+	value |= 0xF7;
+	writel(0x0300B0F0, value);
+#endif
+	uartlog("streaming start\n");
+
+	cmdbuf[0] = cmdbuf[1] = '0';
+	cli_readline("run sensor to dram flow? [n/y]", cmdbuf);
+	if (cmdbuf[0] == 'y') {
+		uartlog("dump %d x %d \n", mode->total_w, mode->total_h);
+		config_csibdg(mode->total_w, mode->total_h, ctx, !!hdr, 0);
+	}
+
+	// restore sensor data
+	sensor_data_convert(sensor_set, setting_num);
+
+	return 0;
+}
+
+struct sensor_setting ar0239_init_720p[] = {
+	{0x301A, 0x0001}, // RESET_REGISTER
+	{SNR_MARKER_DELAY, 200}, /* delay */
+//Linear Mode Setup
+	{0x3088, 0x8000}, // SEQ_CTRL_PORT
+	{0x3086, 0x4558}, // SEQ_DATA_PORT
+	{0x3086, 0x72A6}, // SEQ_DATA_PORT
+	{0x3086, 0x4A31}, // SEQ_DATA_PORT
+	{0x3086, 0x43C5}, // SEQ_DATA_PORT
+	{0x3086, 0x2A08}, // SEQ_DATA_PORT
+	{0x3086, 0x42CE}, // SEQ_DATA_PORT
+	{0x3086, 0xCB8E}, // SEQ_DATA_PORT
+	{0x3086, 0x0345}, // SEQ_DATA_PORT
+	{0x3086, 0x782A}, // SEQ_DATA_PORT
+	{0x3086, 0x1C7B}, // SEQ_DATA_PORT
+	{0x3086, 0xCA3D}, // SEQ_DATA_PORT
+	{0x3086, 0xFF3D}, // SEQ_DATA_PORT
+	{0x3086, 0xFF3D}, // SEQ_DATA_PORT
+	{0x3086, 0xEA2A}, // SEQ_DATA_PORT
+	{0x3086, 0x0C3D}, // SEQ_DATA_PORT
+	{0x3086, 0x102A}, // SEQ_DATA_PORT
+	{0x3086, 0x0D2A}, // SEQ_DATA_PORT
+	{0x3086, 0x1D35}, // SEQ_DATA_PORT
+	{0x3086, 0x2A0D}, // SEQ_DATA_PORT
+	{0x3086, 0x3D10}, // SEQ_DATA_PORT
+	{0x3086, 0x4558}, // SEQ_DATA_PORT
+	{0x3086, 0x2A0C}, // SEQ_DATA_PORT
+	{0x3086, 0x8E03}, // SEQ_DATA_PORT
+	{0x3086, 0x2A1C}, // SEQ_DATA_PORT
+	{0x3086, 0x3DFF}, // SEQ_DATA_PORT
+	{0x3086, 0x3DFF}, // SEQ_DATA_PORT
+	{0x3086, 0x3DEA}, // SEQ_DATA_PORT
+	{0x3086, 0x2A0C}, // SEQ_DATA_PORT
+	{0x3086, 0x62CC}, // SEQ_DATA_PORT
+	{0x3086, 0xCF2A}, // SEQ_DATA_PORT
+	{0x3086, 0x288E}, // SEQ_DATA_PORT
+	{0x3086, 0x0036}, // SEQ_DATA_PORT
+	{0x3086, 0x2A08}, // SEQ_DATA_PORT
+	{0x3086, 0x3D64}, // SEQ_DATA_PORT
+	{0x3086, 0x7ACD}, // SEQ_DATA_PORT
+	{0x3086, 0x3D04}, // SEQ_DATA_PORT
+	{0x3086, 0x442A}, // SEQ_DATA_PORT
+	{0x3086, 0x982C}, // SEQ_DATA_PORT
+	{0x3086, 0x4BA4}, // SEQ_DATA_PORT
+	{0x3086, 0xC257}, // SEQ_DATA_PORT
+	{0x3086, 0x0043}, // SEQ_DATA_PORT
+	{0x3086, 0x0C2D}, // SEQ_DATA_PORT
+	{0x3086, 0x6343}, // SEQ_DATA_PORT
+	{0x3086, 0x5FC4}, // SEQ_DATA_PORT
+	{0x3086, 0xC52A}, // SEQ_DATA_PORT
+	{0x3086, 0xFCC8}, // SEQ_DATA_PORT
+	{0x3086, 0xC553}, // SEQ_DATA_PORT
+	{0x3086, 0x0553}, // SEQ_DATA_PORT
+	{0x3086, 0x078E}, // SEQ_DATA_PORT
+	{0x3086, 0x034D}, // SEQ_DATA_PORT
+	{0x3086, 0x2BF8}, // SEQ_DATA_PORT
+	{0x3086, 0x2924}, // SEQ_DATA_PORT
+	{0x3086, 0x29AE}, // SEQ_DATA_PORT
+	{0x3086, 0x3F07}, // SEQ_DATA_PORT
+	{0x3086, 0x45DC}, // SEQ_DATA_PORT
+	{0x3086, 0x5C19}, // SEQ_DATA_PORT
+	{0x3086, 0x494C}, // SEQ_DATA_PORT
+	{0x3086, 0x095C}, // SEQ_DATA_PORT
+	{0x3086, 0x1B2A}, // SEQ_DATA_PORT
+	{0x3086, 0xFE8E}, // SEQ_DATA_PORT
+	{0x3086, 0x0F3F}, // SEQ_DATA_PORT
+	{0x3086, 0x032B}, // SEQ_DATA_PORT
+	{0x3086, 0xB82B}, // SEQ_DATA_PORT
+	{0x3086, 0x984E}, // SEQ_DATA_PORT
+	{0x3086, 0x29BA}, // SEQ_DATA_PORT
+	{0x3086, 0x6016}, // SEQ_DATA_PORT
+	{0x3086, 0x45CC}, // SEQ_DATA_PORT
+	{0x3086, 0x1645}, // SEQ_DATA_PORT
+	{0x3086, 0x8C3F}, // SEQ_DATA_PORT
+	{0x3086, 0x088E}, // SEQ_DATA_PORT
+	{0x3086, 0x0D5C}, // SEQ_DATA_PORT
+	{0x3086, 0x0B2A}, // SEQ_DATA_PORT
+	{0x3086, 0xFA3F}, // SEQ_DATA_PORT
+	{0x3086, 0x325C}, // SEQ_DATA_PORT
+	{0x3086, 0x033F}, // SEQ_DATA_PORT
+	{0x3086, 0x233E}, // SEQ_DATA_PORT
+	{0x3086, 0x105F}, // SEQ_DATA_PORT
+	{0x3086, 0x2AF2}, // SEQ_DATA_PORT
+	{0x3086, 0x2B90}, // SEQ_DATA_PORT
+	{0x3086, 0x2B80}, // SEQ_DATA_PORT
+	{0x3086, 0xC73F}, // SEQ_DATA_PORT
+	{0x3086, 0x0860}, // SEQ_DATA_PORT
+	{0x3086, 0x29AA}, // SEQ_DATA_PORT
+	{0x3086, 0xD029}, // SEQ_DATA_PORT
+	{0x3086, 0x835F}, // SEQ_DATA_PORT
+	{0x3086, 0x4D19}, // SEQ_DATA_PORT
+	{0x3086, 0x45AC}, // SEQ_DATA_PORT
+	{0x3086, 0x2AFA}, // SEQ_DATA_PORT
+	{0x3086, 0xC63E}, // SEQ_DATA_PORT
+	{0x3086, 0x052A}, // SEQ_DATA_PORT
+	{0x3086, 0xFB2A}, // SEQ_DATA_PORT
+	{0x3086, 0xFB5D}, // SEQ_DATA_PORT
+	{0x3086, 0x8810}, // SEQ_DATA_PORT
+	{0x3086, 0x3F06}, // SEQ_DATA_PORT
+	{0x3086, 0x4588}, // SEQ_DATA_PORT
+	{0x3086, 0x2992}, // SEQ_DATA_PORT
+	{0x3086, 0x212B}, // SEQ_DATA_PORT
+	{0x3086, 0x0485}, // SEQ_DATA_PORT
+	{0x3086, 0x3F04}, // SEQ_DATA_PORT
+	{0x3086, 0x2AFA}, // SEQ_DATA_PORT
+	{0x3086, 0x8E09}, // SEQ_DATA_PORT
+	{0x3086, 0x8D4D}, // SEQ_DATA_PORT
+	{0x3086, 0x4E48}, // SEQ_DATA_PORT
+	{0x3086, 0x2B80}, // SEQ_DATA_PORT
+	{0x3086, 0x4C0C}, // SEQ_DATA_PORT
+	{0x3086, 0x603F}, // SEQ_DATA_PORT
+	{0x3086, 0x30C7}, // SEQ_DATA_PORT
+	{0x3086, 0xC33F}, // SEQ_DATA_PORT
+	{0x3086, 0x052A}, // SEQ_DATA_PORT
+	{0x3086, 0xF23F}, // SEQ_DATA_PORT
+	{0x3086, 0x083F}, // SEQ_DATA_PORT
+	{0x3086, 0x0829}, // SEQ_DATA_PORT
+	{0x3086, 0x82C6}, // SEQ_DATA_PORT
+	{0x3086, 0xD0D2}, // SEQ_DATA_PORT
+	{0x3086, 0x4558}, // SEQ_DATA_PORT
+	{0x3086, 0xD35F}, // SEQ_DATA_PORT
+	{0x3086, 0x4D19}, // SEQ_DATA_PORT
+	{0x3086, 0x2AFA}, // SEQ_DATA_PORT
+	{0x3086, 0xC92A}, // SEQ_DATA_PORT
+	{0x3086, 0x988E}, // SEQ_DATA_PORT
+	{0x3086, 0x0012}, // SEQ_DATA_PORT
+	{0x3086, 0x444A}, // SEQ_DATA_PORT
+	{0x3086, 0x0443}, // SEQ_DATA_PORT
+	{0x3086, 0x1605}, // SEQ_DATA_PORT
+	{0x3086, 0x4316}, // SEQ_DATA_PORT
+	{0x3086, 0x5843}, // SEQ_DATA_PORT
+	{0x3086, 0x165A}, // SEQ_DATA_PORT
+	{0x3086, 0x4316}, // SEQ_DATA_PORT
+	{0x3086, 0x0643}, // SEQ_DATA_PORT
+	{0x3086, 0x1607}, // SEQ_DATA_PORT
+	{0x3086, 0x4316}, // SEQ_DATA_PORT
+	{0x3086, 0x8E03}, // SEQ_DATA_PORT
+	{0x3086, 0x4578}, // SEQ_DATA_PORT
+	{0x3086, 0x3F05}, // SEQ_DATA_PORT
+	{0x3086, 0x2A9D}, // SEQ_DATA_PORT
+	{0x3086, 0x5D88}, // SEQ_DATA_PORT
+	{0x3086, 0x112B}, // SEQ_DATA_PORT
+	{0x3086, 0x0453}, // SEQ_DATA_PORT
+	{0x3086, 0x0D86}, // SEQ_DATA_PORT
+	{0x3086, 0x2944}, // SEQ_DATA_PORT
+	{0x3086, 0x8D4D}, // SEQ_DATA_PORT
+	{0x3086, 0x2B64}, // SEQ_DATA_PORT
+	{0x3086, 0x3F20}, // SEQ_DATA_PORT
+	{0x3086, 0x4558}, // SEQ_DATA_PORT
+	{0x3086, 0x253F}, // SEQ_DATA_PORT
+	{0x3086, 0x058E}, // SEQ_DATA_PORT
+	{0x3086, 0x002A}, // SEQ_DATA_PORT
+	{0x3086, 0x9812}, // SEQ_DATA_PORT
+	{0x3086, 0x444B}, // SEQ_DATA_PORT
+	{0x3086, 0xC1A6}, // SEQ_DATA_PORT
+	{0x3086, 0xB92C}, // SEQ_DATA_PORT
+	{0x3086, 0x2C2C}, // SEQ_DATA_PORT
+	{0x3086, 0x2C2C}, // SEQ_DATA_PORT
+
+//rev 2 Initialize setting-Parallel Linear
+	{0x3EFC, 0xE0FF}, // DAC_LD_48_49
+	{0x30AE, 0x0003}, // X_ODD_INC_CB
+	{0x3092, 0x086F}, // ROW_NOISE_CONTROL
+	{0x30BA, 0x762C}, // DIGITAL_CTRL
+	{0x317E, 0x8F70}, // DELTA_DK_CLIP
+	{0x3180, 0x8040}, // DELTA_DK_CONTROL
+	{0x3ED2, 0x0099}, // DAC_LD_6_7
+	{0x3ED6, 0x14A1}, // DAC_LD_10_11
+	{0x3ED8, 0xF9EE}, // DAC_LD_12_13
+	{0x3EDA, 0x6E40}, // DAC_LD_14_15
+	{0x3EDC, 0x08C5}, // DAC_LD_16_17
+	{0x3EDE, 0x11A1}, // DAC_LD_18_19
+	{0x3EE0, 0x118A}, // DAC_LD_20_21
+	{0x3EE2, 0x31C6}, // DAC_LD_22_23
+	{0x3EE4, 0x0D77}, // DAC_LD_24_25
+	{0x3EFE, 0x96F2}, // DAC_LD_50_51
+	{0x3F04, 0x0C18}, // DAC_LD_56_57
+	{0x3ED0, 0xC400}, // DAC_LD_4_5
+	{0x3ED4, 0x03CF}, // DAC_LD_8_9
+	{0x3ECE, 0x40F3}, // DAC_LD_2_3
+	{0x3F02, 0x2E1C}, // DAC_LD_54_55
+	{0x3EF4, 0x5805}, // DAC_LD_40_41
+	{0x3EF2, 0x1465}, // DAC_LD_38_39
+	{0x3EF2, 0x9465}, // DAC_LD_38_39
+	{0x3EF2, 0x9464}, // DAC_LD_38_39
+	{0x3EF4, 0x5805}, // DAC_LD_40_41
+	{0x3EF4, 0x5805}, // DAC_LD_40_41
+	{0x3EF4, 0x5805}, // DAC_LD_40_41
+	{0x3EF6, 0x1252}, // DAC_LD_42_43
+	{0x3EF6, 0x5252}, // DAC_LD_42_43
+	{0x3EF6, 0x5253}, // DAC_LD_42_43
+	{0x3EF8, 0x14F2}, // DAC_LD_44_45
+	{0x3EF8, 0x54F2}, // DAC_LD_44_45
+	{0x3EF8, 0x54F4}, // DAC_LD_44_45
+	{0x3F4C, 0x4B3C}, // PIX_DEF_1D_DDC_LO_DEF
+	{0x3F4C, 0x52BC}, // PIX_DEF_1D_DDC_LO_DEF
+	{0x3F4E, 0x573C}, // PIX_DEF_1D_DDC_HI_DEF
+	{0x3F4E, 0x3E3C}, // PIX_DEF_1D_DDC_HI_DEF
+	{0x3F50, 0x400B}, // PIX_DEF_1D_DDC_EDGE
+	{0x3F50, 0x380B}, // PIX_DEF_1D_DDC_EDGE
+	{0x31E0, 0x000F}, // PIX_DEF_ID
+	{0x3324, 0x001C}, // ATTENUATION_CTRL
+	{0x30B4, 0x01C1}, // TEMPSENS_CTRL_REG
+	{0x3ED8, 0xFAEE}, // DAC_LD_12_13
+
+//PLL_PIXCLK_44.86MHz
+	{0x31AC, 0x0C0C}, // DATA_FORMAT_BITS
+#if 0
+	{0x302A, 0x0008}, //VT_PIX_CLK_DIV = 8
+	{0x302C, 0x0001}, //VT_SYS_CLK_DIV = 1
+	{0x302E, 0x0009}, //PRE_PLL_CLK_DIV = 9
+	{0x3030, 0x0057}, //A0 //PLL_MULTIPLIER = 87
+	{0x3036, 0x000C}, //OP_PIX_CLK_DIV = 12
+	{0x3038, 0x0001}, //OP_SYS_CLK_DIV = 1
+#endif
+	{0x302A, 0x0008}, //VT_PIX_CLK_DIV = 8
+	{0x302C, 0x0001}, //VT_SYS_CLK_DIV = 1
+	{0x302E, 0x0008}, //PRE_PLL_CLK_DIV = 8
+	{0x3030, 0x0072}, //A0 //PLL_MULTIPLIER = 114
+	{0x3036, 0x000C}, //OP_PIX_CLK_DIV = 12
+	{0x3038, 0x0001}, //OP_SYS_CLK_DIV = 1
+//Operation Mode
+	{0x3082, 0x0001}, // OPERATION_MODE_CTRL
+	{0x318E, 0x0000}, // HDR_MC_CTRL3
+	{0x30B0, 0x123A}, // DIGITAL_TEST
+	{0x31AC, 0x0C0C}, // DATA_FORMAT_BITS
+	{0x31D0, 0x0000}, // COMPANDING
+	{0x3004, 0x0148}, //X_ADDR_START = 328
+	{0x3008, 0x0647}, //X_ADDR_END = 1607
+	{0x3002, 0x00EA}, //Y_ADDR_START = 234
+	{0x3006, 0x03B9}, //Y_ADDR_END = 953
+	{0x300C, 0x01BC}, //LINE_LENGTH_PCK = 444
+	{0x300A, 0x034A}, //FRAME_LENGTH_LINES = 842
+	{0x3012, 0x0346}, //COARSE_INTEGRATION_TIME
+
+//Parallel setting
+	{0x31AE, 0x0001}, // SERIAL_FORMAT
+	{0x301A, 0x10D8}, // RESET_REGISTER
+	{0x3ED8, 0xFAEE}, // DAC_LD_12_13
+
+
+	{0x3064, 0x1802}, // SMIA_TEST
+	{0x301A, 0x10DC}, // RESET_REGISTER
+	{}
+};
+
+static int ar0239_poweron(void *priv)
+{
+	pattern_ctx *ctx = (pattern_ctx *)priv;
+	struct sensor_info *sinf = (struct sensor_info *)ctx->ptn->priv;
+	struct snr_i2c_adapter *adpt = NULL;
+	struct sensor_setting *pset;
+	char cmdbuf[8];
+	struct sensor_mode *mode = &ar0239_mode[AR0239_MODE_720P30];
+	int i, r;
+
+	// convert sensor data
+	sensor_data_convert(ar0239_init_720p, ARRAY_SIZE(ar0239_init_720p));
+	// i2c config here
+	snr_bm_i2c_get_adap((void *)&adpt);
+	sinf->adpt = adpt;
+
+	adpt->slaveaddr = sinf->dev;
+	snr_bm_i2c_init(adpt);
+
+	// i2c initial sequence
+	for (i = 0; i < ARRAY_SIZE(ar0239_init_720p); i++) {
+		pset = &(ar0239_init_720p[i]);
+
+		if (pset->addr == SNR_MARKER_DELAY) {
+			uartlog("sensor wr delay\n");
+			udelay(pset->val);
+			continue;
+		}
+		r = sinf->adpt->write(sinf->adpt, sinf->dev, pset->addr, sinf->alen, (uint8_t*)&(pset->val), 2);
+		if (r < 0)
+			uartlog("%s i2c_write fail addr[0x%x]\n", ctx->ptn->name, pset->addr);
+	}
+
+	uartlog("Read back i2c registers:\n");
+	for (i = 0; i < ARRAY_SIZE(ar0239_init_720p); i++) {
+		uint16_t val = 0;
+
+		pset = &(ar0239_init_720p[i]);
+		// skip SEQ_DATA_PORT
+		if (pset->addr == 0x3086)
+			continue;
+		r = sinf->adpt->read(sinf->adpt, sinf->dev, pset->addr, sinf->alen, (uint8_t*)&val, 2);
+
+		uartlog("reg[0x%x]=0x%x(0x%x)\n", pset->addr, val, pset->val);
+	}
+
+	uartlog("streaming start\n");
+
+	cmdbuf[0] = cmdbuf[1] = '0';
+	cli_readline("run sensor to dram flow? [n/y]", cmdbuf);
+	if (cmdbuf[0] == 'y') {
+		uartlog("dump %d x %d \n", mode->total_w, mode->total_h);
+		config_csibdg(mode->total_w, mode->total_h, ctx, 0, 0);
+	}
+	// restore sensor data
+	sensor_data_convert(ar0239_init_720p, ARRAY_SIZE(ar0239_init_720p));
+	return 0;
+}
+
+#define OS08A10_TEST_PATTERN_REG       0x5081
+#define OS081A0_TEST_PTN_DISABLE       0x00
+//#define OS081A0_TEST_PTN_COLOR_BAR     0x80
+#define OS081A0_TEST_PTN_COLOR_BAR     0x92
+#define OS08A10_DEFAULT_SHS		0x1F
+
+struct sensor_setting os08a10_init_720p_4lane[] = {
+	{0x0100, 0x00},
+	{0x0103, 0x01},
+	{0x0303, 0x01},
+	{0x0305, 0x32},
+	{0x0306, 0x00},
+	{0x0308, 0x03},
+	{0x0309, 0x04},
+	{0x032a, 0x00},
+	{0x300f, 0x11},
+	{0x3010, 0x01},
+	{0x3011, 0x04},
+	{0x3012, 0x41},
+	{0x3016, 0xf0},
+	{0x301e, 0x98},
+	{0x3031, 0xa9},
+	{0x3103, 0x92},
+	{0x3104, 0x01},
+	{0x3106, 0x10},
+	{0x3400, 0x04},
+	{0x3025, 0x03},
+	{0x3425, 0x01},
+	{0x3428, 0x01},
+	{0x3406, 0x08},
+	{0x3408, 0x03},
+	{0x340c, 0xff},
+	{0x340d, 0xff},
+	{0x031e, 0x09},
+	{0x3501, 0x04},
+	{0x3502, 0x62},
+	{0x3505, 0x83},
+	{0x3508, 0x00},
+	{0x3509, 0x80},
+	{0x350a, 0x04},
+	{0x350b, 0x00},
+	{0x350c, 0x00},
+	{0x350d, 0x80},
+	{0x350e, 0x04},
+	{0x350f, 0x00},
+	{0x3600, 0x09},
+	{0x3603, 0x2c},
+	{0x3605, 0x50},
+	{0x3609, 0xb5},
+	{0x3610, 0x39},
+	{0x360c, 0x01},
+	{0x3628, 0xa4},
+	{0x362d, 0x10},
+	{0x3660, 0x43},
+	{0x3661, 0x06},
+	{0x3662, 0x00},
+	{0x3663, 0x28},
+	{0x3664, 0x0d},
+	{0x366a, 0x38},
+	{0x366b, 0xa0},
+	{0x366d, 0x00},
+	{0x366e, 0x00},
+	{0x3680, 0x00},
+	{0x36c0, 0x00},
+	{0x3701, 0x02},
+	{0x373b, 0x02},
+	{0x373c, 0x02},
+	{0x3736, 0x02},
+	{0x3737, 0x02},
+	{0x3705, 0x00},
+	{0x3706, 0x39},
+	{0x370a, 0x00},
+	{0x370b, 0x98},
+	{0x3709, 0x49},
+	{0x3714, 0x22},
+	{0x371c, 0x00},
+	{0x371d, 0x08},
+	{0x3740, 0x1b},
+	{0x3741, 0x04},
+	{0x375e, 0x0b},
+	{0x3760, 0x10},
+	{0x3776, 0x10},
+	{0x3781, 0x02},
+	{0x3782, 0x04},
+	{0x3783, 0x02},
+	{0x3784, 0x08},
+	{0x3785, 0x08},
+	{0x3788, 0x01},
+	{0x3789, 0x01},
+	{0x3797, 0x04},
+	{0x3762, 0x11},
+	{0x3800, 0x00},
+	{0x3801, 0x00},
+	{0x3802, 0x00},
+	{0x3803, 0x0c},
+	{0x3804, 0x0e},
+	{0x3805, 0xff},
+	{0x3806, 0x08},
+	{0x3807, 0x6f},
+	{0x3808, 0x07},
+	{0x3809, 0x80},
+	{0x380a, 0x04},
+	{0x380b, 0x38},
+	{0x380c, 0x04},
+	{0x380d, 0x0c},
+	{0x380e, 0x04},
+	{0x380f, 0x86},
+	{0x3813, 0x08},
+	{0x3814, 0x03},
+	{0x3815, 0x01},
+	{0x3816, 0x03},
+	{0x3817, 0x01},
+	{0x381c, 0x00},
+	{0x3820, 0x01},
+	{0x3821, 0x05},
+	{0x3823, 0x08},
+	{0x3826, 0x00},
+	{0x3827, 0x08},
+	{0x382d, 0x08},
+	{0x3832, 0x02},
+	{0x3833, 0x00},
+	{0x383c, 0x48},
+	{0x383d, 0xff},
+	{0x3d85, 0x0b},
+	{0x3d84, 0x40},
+	{0x3d8c, 0x63},
+	{0x3d8d, 0xd7},
+	{0x4000, 0xf8},
+	{0x4001, 0x2b},
+	{0x4004, 0x00},
+	{0x4005, 0x40},
+	{0x400a, 0x01},
+	{0x400f, 0xa0},
+	{0x4010, 0x12},
+	{0x4018, 0x00},
+	{0x4008, 0x02},
+	{0x4009, 0x05},
+	{0x401a, 0x58},
+	{0x4050, 0x00},
+	{0x4051, 0x01},
+	{0x4028, 0x2f},
+	{0x4052, 0x00},
+	{0x4053, 0x80},
+	{0x4054, 0x00},
+	{0x4055, 0x80},
+	{0x4056, 0x00},
+	{0x4057, 0x80},
+	{0x4058, 0x00},
+	{0x4059, 0x80},
+	{0x430b, 0xff},
+	{0x430c, 0xff},
+	{0x430d, 0x00},
+	{0x430e, 0x00},
+	{0x4501, 0x98},
+	{0x4502, 0x00},
+	{0x4643, 0x00},
+	{0x4640, 0x01},
+	{0x4641, 0x04},
+	{0x4800, 0x44},
+	{0x4809, 0x2b},
+	{0x4813, 0x90},
+	{0x4817, 0x04},
+	{0x4833, 0x18},
+	{0x4837, 0x14},
+	{0x483b, 0x00},
+	{0x484b, 0x03},
+	{0x4850, 0x7c},
+	{0x4852, 0x06},
+	{0x4856, 0x58},
+	{0x4857, 0xaa},
+	{0x4862, 0x0a},
+	{0x4869, 0x18},
+	{0x486a, 0xaa},
+	{0x486e, 0x03},
+	{0x486f, 0x55},
+	{0x4875, 0xf0},
+	{0x5000, 0x89},
+	{0x5001, 0x42},
+	{0x5004, 0x40},
+	{0x5005, 0x00},
+	{0x5180, 0x00},
+	{0x5181, 0x10},
+	{0x580b, 0x03},
+	{0x4d00, 0x03},
+	{0x4d01, 0xc9},
+	{0x4d02, 0xbc},
+	{0x4d03, 0xc6},
+	{0x4d04, 0x4a},
+	{0x4d05, 0x25},
+	{0x4700, 0x2b},
+	{0x4e00, 0x2b},
+	{0x0305, 0x12},
+	//{0x0325, 0x45},
+	//{0x380c, 0x10}, // ori
+	//{0x380d, 0x9f},
+	//{0x380c, 0x1B},
+	//{0x380d, 0x58},
+	{0x380c, 0x19}, //latest
+	{0x380d, 0xC8},
+	{0x4837, 0x10},
+	{0x3808, 0x05},
+	{0x3809, 0x00},
+	{0x380a, 0x02},
+	{0x380b, 0xd0},
+	{0x0100, 0x01},
+	{0x0100, 0x01},
+	{0x0100, 0x01},
+	{0x0100, 0x01},
+};
+
+struct sensor_setting os08a10_init_720p_2lane[] = {
+	{0x0100, 0x00},
+	{0x0103, 0x01},
+	{0x0303, 0x01},
+	{0x0305, 0x32},
+	{0x0306, 0x00},
+	{0x0308, 0x03},
+	{0x0309, 0x04},
+	{0x032a, 0x00},
+	{0x300f, 0x11},
+	{0x3010, 0x01},
+	{0x3011, 0x04},
+	{0x3012, 0x21},
+	{0x3016, 0xf0},
+	{0x301e, 0x98},
+	{0x3031, 0xa9},
+	{0x3103, 0x92},
+	{0x3104, 0x01},
+	{0x3106, 0x10},
+	{0x3400, 0x04},
+	{0x3025, 0x03},
+	{0x3425, 0x01},
+	{0x3428, 0x01},
+	{0x3406, 0x08},
+	{0x3408, 0x03},
+	{0x340c, 0xff},
+	{0x340d, 0xff},
+	{0x031e, 0x09},
+	{0x3501, 0x04},
+	{0x3502, 0x62},
+	{0x3505, 0x83},
+	{0x3508, 0x00},
+	{0x3509, 0x80},
+	{0x350a, 0x04},
+	{0x350b, 0x00},
+	{0x350c, 0x00},
+	{0x350d, 0x80},
+	{0x350e, 0x04},
+	{0x350f, 0x00},
+	{0x3600, 0x09},
+	{0x3603, 0x2c},
+	{0x3605, 0x50},
+	{0x3609, 0xb5},
+	{0x3610, 0x39},
+	{0x360c, 0x01},
+	{0x3628, 0xa4},
+	{0x362d, 0x10},
+	{0x3660, 0x43},
+	{0x3661, 0x06},
+	{0x3662, 0x00},
+	{0x3663, 0x28},
+	{0x3664, 0x0d},
+	{0x366a, 0x38},
+	{0x366b, 0xa0},
+	{0x366d, 0x00},
+	{0x366e, 0x00},
+	{0x3680, 0x00},
+	{0x36c0, 0x00},
+	{0x3701, 0x02},
+	{0x373b, 0x02},
+	{0x373c, 0x02},
+	{0x3736, 0x02},
+	{0x3737, 0x02},
+	{0x3705, 0x00},
+	{0x3706, 0x39},
+	{0x370a, 0x00},
+	{0x370b, 0x98},
+	{0x3709, 0x49},
+	{0x3714, 0x22},
+	{0x371c, 0x00},
+	{0x371d, 0x08},
+	{0x3740, 0x1b},
+	{0x3741, 0x04},
+	{0x375e, 0x0b},
+	{0x3760, 0x10},
+	{0x3776, 0x10},
+	{0x3781, 0x02},
+	{0x3782, 0x04},
+	{0x3783, 0x02},
+	{0x3784, 0x08},
+	{0x3785, 0x08},
+	{0x3788, 0x01},
+	{0x3789, 0x01},
+	{0x3797, 0x04},
+	{0x3762, 0x11},
+	{0x3800, 0x00},
+	{0x3801, 0x00},
+	{0x3802, 0x00},
+	{0x3803, 0x0c},
+	{0x3804, 0x0e},
+	{0x3805, 0xff},
+	{0x3806, 0x08},
+	{0x3807, 0x6f},
+	{0x3808, 0x07},
+	{0x3809, 0x80},
+	{0x380a, 0x04},
+	{0x380b, 0x38},
+	{0x380c, 0x04},
+	{0x380d, 0x0c},
+	{0x380e, 0x04},
+	{0x380f, 0x86},
+	{0x3813, 0x08},
+	{0x3814, 0x03},
+	{0x3815, 0x01},
+	{0x3816, 0x03},
+	{0x3817, 0x01},
+	{0x381c, 0x00},
+	{0x3820, 0x01},
+	{0x3821, 0x05},
+	{0x3823, 0x08},
+	{0x3826, 0x00},
+	{0x3827, 0x08},
+	{0x382d, 0x08},
+	{0x3832, 0x02},
+	{0x3833, 0x00},
+	{0x383c, 0x48},
+	{0x383d, 0xff},
+	{0x3d85, 0x0b},
+	{0x3d84, 0x40},
+	{0x3d8c, 0x63},
+	{0x3d8d, 0xd7},
+	{0x4000, 0xf8},
+	{0x4001, 0x2b},
+	{0x4004, 0x00},
+	{0x4005, 0x40},
+	{0x400a, 0x01},
+	{0x400f, 0xa0},
+	{0x4010, 0x12},
+	{0x4018, 0x00},
+	{0x4008, 0x02},
+	{0x4009, 0x05},
+	{0x401a, 0x58},
+	{0x4050, 0x00},
+	{0x4051, 0x01},
+	{0x4028, 0x2f},
+	{0x4052, 0x00},
+	{0x4053, 0x80},
+	{0x4054, 0x00},
+	{0x4055, 0x80},
+	{0x4056, 0x00},
+	{0x4057, 0x80},
+	{0x4058, 0x00},
+	{0x4059, 0x80},
+	{0x430b, 0xff},
+	{0x430c, 0xff},
+	{0x430d, 0x00},
+	{0x430e, 0x00},
+	{0x4501, 0x98},
+	{0x4502, 0x00},
+	{0x4643, 0x00},
+	{0x4640, 0x01},
+	{0x4641, 0x04},
+	{0x4800, 0x44}, // [4] Enable LS/LE, [5] Enable discontinuous clk
+	{0x4809, 0x2b},
+	{0x4813, 0x90},
+	{0x4817, 0x04},
+	{0x4833, 0x18},
+	{0x4837, 0x14},
+	{0x483b, 0x00},
+	{0x484b, 0x03},
+	{0x4850, 0x7c},
+	{0x4852, 0x06},
+	{0x4856, 0x58},
+	{0x4857, 0xaa},
+	{0x4862, 0x0a},
+	{0x4869, 0x18},
+	{0x486a, 0xaa},
+	{0x486e, 0x03},
+	{0x486f, 0x55},
+	{0x4875, 0xf0},
+	{0x5000, 0x89},
+	{0x5001, 0x42},
+	{0x5004, 0x40},
+	{0x5005, 0x00},
+	{0x5180, 0x00},
+	{0x5181, 0x10},
+	{0x580b, 0x03},
+	{0x4d00, 0x03},
+	{0x4d01, 0xc9},
+	{0x4d02, 0xbc},
+	{0x4d03, 0xc6},
+	{0x4d04, 0x4a},
+	{0x4d05, 0x25},
+	{0x4700, 0x2b},
+	{0x4e00, 0x2b},
+	{0x0305, 0x12},
+	//{0x0325, 0x45},
+	//{0x380c, 0x10}, // ori
+	//{0x380d, 0x9f},
+	//{0x380c, 0x23},
+	//{0x380d, 0x28},
+	{0x380c, 0x19}, //latest
+	{0x380d, 0xC8},
+	{0x4837, 0x10},
+	{0x3808, 0x05},
+	{0x3809, 0x00},
+	{0x380a, 0x02},
+	{0x380b, 0xd0},
+	{0x0100, 0x01},
+	{0x0100, 0x01},
+	{0x0100, 0x01},
+	{0x0100, 0x01},
+};
+
+struct sensor_setting os08a10_init_720p_2lane_hdr_dt[] = {
+	{0x0100, 0x00},
+	{0x0103, 0x01},
+	{0x0303, 0x01},
+	{0x0305, 0x32},
+	{0x0306, 0x00},
+	{0x0308, 0x03},
+	{0x0309, 0x04},
+	{0x032a, 0x00},
+	{0x300f, 0x11},
+	{0x3010, 0x01},
+	{0x3011, 0x04},
+	{0x3012, 0x41},
+	{0x3016, 0xf0},
+	{0x301e, 0x98},
+	{0x3031, 0xa9},
+	{0x3103, 0x92},
+	{0x3104, 0x01},
+	{0x3106, 0x10},
+	{0x340c, 0xff},
+	{0x340d, 0xff},
+	{0x031e, 0x09},
+	{0x3501, 0x04},
+	{0x3502, 0x62},
+	{0x3505, 0x83},
+	{0x3508, 0x00},
+	{0x3509, 0x80},
+	{0x350a, 0x04},
+	{0x350b, 0x00},
+	{0x350c, 0x00},
+	{0x350d, 0x80},
+	{0x350e, 0x04},
+	{0x350f, 0x00},
+	{0x3600, 0x09},
+	{0x3603, 0x2c},
+	{0x3605, 0x50},
+	{0x3609, 0xb5},
+	{0x3610, 0x39},
+	{0x360c, 0x01},
+	{0x3628, 0xa4},
+	{0x362d, 0x10},
+	{0x3660, 0x40},
+	{0x3661, 0x1f},
+	{0x3662, 0x00},
+	{0x3663, 0x28},
+	{0x3664, 0x0d},
+	{0x366a, 0x38},
+	{0x366b, 0xa0},
+	{0x366d, 0x02},
+	{0x366e, 0x7c},
+	{0x3680, 0x00},
+	{0x36c0, 0x00},
+	{0x3701, 0x02},
+	{0x373b, 0x02},
+	{0x373c, 0x02},
+	{0x3736, 0x02},
+	{0x3737, 0x02},
+	{0x3705, 0x00},
+	{0x3706, 0x39},
+	{0x370a, 0x00},
+	{0x370b, 0x98},
+	{0x3709, 0x49},
+	{0x3714, 0x22},
+	{0x371c, 0x00},
+	{0x371d, 0x08},
+	{0x3740, 0x1b},
+	{0x3741, 0x04},
+	{0x375e, 0x0b},
+	{0x3760, 0x10},
+	{0x3776, 0x10},
+	{0x3781, 0x02},
+	{0x3782, 0x04},
+	{0x3783, 0x02},
+	{0x3784, 0x08},
+	{0x3785, 0x08},
+	{0x3788, 0x01},
+	{0x3789, 0x01},
+	{0x3797, 0x04},
+	{0x3762, 0x11},
+	{0x3800, 0x00},
+	{0x3801, 0x00},
+	{0x3802, 0x00},
+	{0x3803, 0x0c},
+	{0x3804, 0x0e},
+	{0x3805, 0xff},
+	{0x3806, 0x08},
+	{0x3807, 0x6f},
+	{0x3808, 0x07},
+	{0x3809, 0x80},
+	{0x380a, 0x04},
+	{0x380b, 0x38},
+	{0x380c, 0x04},
+	{0x380d, 0x0c},
+	{0x380e, 0x04},
+	{0x380f, 0x86},
+	{0x3813, 0x08},
+	{0x3814, 0x03},
+	{0x3815, 0x01},
+	{0x3816, 0x03},
+	{0x3817, 0x01},
+	{0x381c, 0x02},
+	{0x3820, 0x01},
+	{0x3821, 0x25},
+	{0x3823, 0x08},
+	{0x3826, 0x00},
+	{0x3827, 0x08},
+	{0x382d, 0x08},
+	{0x3832, 0x02},
+	{0x3833, 0x01},
+	{0x383c, 0x48},
+	{0x383d, 0xff},
+	{0x3d85, 0x0b},
+	{0x3d84, 0x40},
+	{0x3d8c, 0x63},
+	{0x3d8d, 0xd7},
+	{0x4000, 0xf8},
+	{0x4001, 0xeb},
+	{0x4004, 0x00},
+	{0x4005, 0x40},
+	{0x400a, 0x01},
+	{0x400f, 0xa0},
+	{0x4010, 0x12},
+	{0x4018, 0x00},
+	{0x4008, 0x02},
+	{0x4009, 0x05},
+	{0x401a, 0x58},
+	{0x4050, 0x00},
+	{0x4051, 0x01},
+	{0x4028, 0x2f},
+	{0x4052, 0x00},
+	{0x4053, 0x80},
+	{0x4054, 0x00},
+	{0x4055, 0x80},
+	{0x4056, 0x00},
+	{0x4057, 0x80},
+	{0x4058, 0x00},
+	{0x4059, 0x80},
+	{0x430b, 0xff},
+	{0x430c, 0xff},
+	{0x430d, 0x00},
+	{0x430e, 0x00},
+	{0x4501, 0x98},
+	{0x4502, 0x00},
+	{0x4643, 0x00},
+	{0x4640, 0x01},
+	{0x4641, 0x04},
+	{0x4800, 0x44},
+	{0x4809, 0x19},
+	//{0x4809, 0x2b}, // Long exposure data type
+	{0x4812, 0x2b}, // Short exposure data type
+	{0x4813, 0x98},
+	{0x4817, 0x04},
+	{0x4833, 0x18},
+	{0x4837, 0x14},
+	{0x483b, 0x00},
+	{0x484b, 0x03},
+	{0x4850, 0x7c},
+	{0x4852, 0x06},
+	{0x4856, 0x58},
+	{0x4857, 0xaa},
+	{0x4862, 0x0a},
+	{0x4869, 0x18},
+	{0x486a, 0xaa},
+	{0x486e, 0x0b},
+	{0x486f, 0x55},
+	{0x4875, 0xf0},
+	{0x5000, 0x89},
+	{0x5001, 0x42},
+	{0x5004, 0x40},
+	{0x5005, 0x00},
+	{0x5180, 0x00},
+	{0x5181, 0x10},
+	{0x580b, 0x0e},
+	{0x4d00, 0x03},
+	{0x4d01, 0xc9},
+	{0x4d02, 0xbc},
+	{0x4d03, 0xc6},
+	{0x4d04, 0x4a},
+	{0x4d05, 0x25},
+	{0x4700, 0x2b},
+	{0x4e00, 0x2b},
+	{0x3501, 0x00}, // long exposure shutter
+	{0x3502, 0x50},
+	{0x3511, OS08A10_DEFAULT_SHS>>8}, // short exposure shutter
+	{0x3512, OS08A10_DEFAULT_SHS&0xFF},
+	{0x3833, 0x01},
+	{0x3808, 0x05},
+	{0x3809, 0x00},
+	{0x380a, 0x02},
+	{0x380b, 0xd0},
+	{0x0305, 0x12},
+	{0x0325, 0x18},
+	{0x4837, 0x10},
+	{0x3012, 0x21},
+	//{0x380c, 0x08}, // ori
+	//{0x380d, 0x18},
+	{0x380c, 0x19}, //latest
+	{0x380d, 0xC8},
+	{0x0100, 0x01},
+	{0x0100, 0x01},
+	{0x0100, 0x01},
+	{0x0100, 0x01},
+};
+
+struct sensor_setting os08a10_init_720p_2lane_hdr_vc[] = {
+	{0x0100, 0x00},
+	{0x0103, 0x01},
+	{0x0303, 0x01},
+	{0x0305, 0x32},
+	{0x0306, 0x00},
+	{0x0308, 0x03},
+	{0x0309, 0x04},
+	{0x032a, 0x00},
+	{0x300f, 0x11},
+	{0x3010, 0x01},
+	{0x3011, 0x04},
+	{0x3012, 0x41},
+	{0x3016, 0xf0},
+	{0x301e, 0x98},
+	{0x3031, 0xa9},
+	{0x3103, 0x92},
+	{0x3104, 0x01},
+	{0x3106, 0x10},
+	{0x340c, 0xff},
+	{0x340d, 0xff},
+	{0x031e, 0x09},
+	{0x3501, 0x04},
+	{0x3502, 0x62},
+	{0x3505, 0x83},
+	{0x3508, 0x00},
+	{0x3509, 0x80},
+	{0x350a, 0x04},
+	{0x350b, 0x00},
+	{0x350c, 0x00},
+	{0x350d, 0x80},
+	{0x350e, 0x04},
+	{0x350f, 0x00},
+	{0x3600, 0x09},
+	{0x3603, 0x2c},
+	{0x3605, 0x50},
+	{0x3609, 0xb5},
+	{0x3610, 0x39},
+	{0x360c, 0x01},
+	{0x3628, 0xa4},
+	{0x362d, 0x10},
+	{0x3660, 0x42},
+	{0x3661, 0x07},
+	{0x3662, 0x00},
+	{0x3663, 0x28},
+	{0x3664, 0x0d},
+	{0x366a, 0x38},
+	{0x366b, 0xa0},
+	{0x366d, 0x00},
+	{0x366e, 0x00},
+	{0x3680, 0x00},
+	{0x36c0, 0x00},
+	{0x3701, 0x02},
+	{0x373b, 0x02},
+	{0x373c, 0x02},
+	{0x3736, 0x02},
+	{0x3737, 0x02},
+	{0x3705, 0x00},
+	{0x3706, 0x39},
+	{0x370a, 0x00},
+	{0x370b, 0x98},
+	{0x3709, 0x49},
+	{0x3714, 0x22},
+	{0x371c, 0x00},
+	{0x371d, 0x08},
+	{0x3740, 0x1b},
+	{0x3741, 0x04},
+	{0x375e, 0x0b},
+	{0x3760, 0x10},
+	{0x3776, 0x10},
+	{0x3781, 0x02},
+	{0x3782, 0x04},
+	{0x3783, 0x02},
+	{0x3784, 0x08},
+	{0x3785, 0x08},
+	{0x3788, 0x01},
+	{0x3789, 0x01},
+	{0x3797, 0x04},
+	{0x3762, 0x11},
+	{0x3800, 0x00},
+	{0x3801, 0x00},
+	{0x3802, 0x00},
+	{0x3803, 0x0c},
+	{0x3804, 0x0e},
+	{0x3805, 0xff},
+	{0x3806, 0x08},
+	{0x3807, 0x6f},
+	{0x3808, 0x07},
+	{0x3809, 0x80},
+	{0x380a, 0x04},
+	{0x380b, 0x38},
+	{0x380c, 0x04},
+	{0x380d, 0x0c},
+	{0x380e, 0x04},
+	{0x380f, 0x86},
+	{0x3813, 0x08},
+	{0x3814, 0x03},
+	{0x3815, 0x01},
+	{0x3816, 0x03},
+	{0x3817, 0x01},
+	{0x381c, 0x08},
+	{0x3820, 0x01},
+	{0x3821, 0x25},
+	{0x3823, 0x08},
+	{0x3826, 0x00},
+	{0x3827, 0x08},
+	{0x382d, 0x08},
+	{0x3832, 0x02},
+	{0x3833, 0x01},
+	{0x383c, 0x48},
+	{0x383d, 0xff},
+	{0x3d85, 0x0b},
+	{0x3d84, 0x40},
+	{0x3d8c, 0x63},
+	{0x3d8d, 0xd7},
+	{0x4000, 0xf8},
+	{0x4001, 0x2b},
+	{0x4004, 0x00},
+	{0x4005, 0x40},
+	{0x400a, 0x01},
+	{0x400f, 0xa0},
+	{0x4010, 0x12},
+	{0x4018, 0x00},
+	{0x4008, 0x02},
+	{0x4009, 0x05},
+	{0x401a, 0x58},
+	{0x4050, 0x00},
+	{0x4051, 0x01},
+	{0x4028, 0x2f},
+	{0x4052, 0x00},
+	{0x4053, 0x80},
+	{0x4054, 0x00},
+	{0x4055, 0x80},
+	{0x4056, 0x00},
+	{0x4057, 0x80},
+	{0x4058, 0x00},
+	{0x4059, 0x80},
+	{0x430b, 0xff},
+	{0x430c, 0xff},
+	{0x430d, 0x00},
+	{0x430e, 0x00},
+	{0x4501, 0x98},
+	{0x4502, 0x00},
+	{0x4643, 0x00},
+	{0x4640, 0x01},
+	{0x4641, 0x04},
+	{0x4800, 0x44}, // [4] Enable LS/LE, [5] Enable discontinuous clk
+	{0x4809, 0x2b},
+	{0x4813, 0x98},
+	{0x4817, 0x04},
+	{0x4833, 0x18},
+	{0x4837, 0x14},
+	{0x483b, 0x00},
+	{0x484b, 0x03},
+	{0x4850, 0x7c},
+	{0x4852, 0x06},
+	{0x4856, 0x58},
+	{0x4857, 0xaa},
+	{0x4862, 0x0a},
+	{0x4869, 0x18},
+	{0x486a, 0xaa},
+	{0x486e, 0x07},
+	{0x486f, 0x55},
+	{0x4875, 0xf0},
+	{0x5000, 0x89},
+	{0x5001, 0x42},
+	{0x5004, 0x40},
+	{0x5005, 0x00},
+	{0x5180, 0x00},
+	{0x5181, 0x10},
+	{0x580b, 0x03},
+	{0x4d00, 0x03},
+	{0x4d01, 0xc9},
+	{0x4d02, 0xbc},
+	{0x4d03, 0xc6},
+	{0x4d04, 0x4a},
+	{0x4d05, 0x25},
+	{0x4700, 0x2b},
+	{0x4e00, 0x2b},
+	{0x3501, 0x00},
+	{0x3502, 0x20},
+	{0x3511, 0x00},
+	{0x3512, 0x20},
+	{0x3833, 0x01},
+	{0x3808, 0x05},
+	{0x3809, 0x00},
+	{0x380a, 0x02},
+	{0x380b, 0xd0},
+	{0x0305, 0x12},
+	{0x0325, 0x18},
+	{0x4837, 0x10},
+	{0x383d, 0x73},
+	{0x3012, 0x21},
+	//{0x380c, 0x08},
+	//{0x380d, 0x18},
+	{0x380c, 0x19}, //latest
+	{0x380d, 0xC8},
+	{0x0100, 0x01},
+	{0x0100, 0x01},
+	{0x0100, 0x01},
+	{0x0100, 0x01},
+};
+
+static int os08a10_poweron(void *priv)
+{
+	pattern_ctx *ctx = (pattern_ctx *)priv;
+	struct sensor_info *sinf = (struct sensor_info *)ctx->ptn->priv;
+	struct snr_i2c_adapter *adpt = NULL;
+	struct sensor_setting *sensor_set = os08a10_init_720p_4lane;
+	int setting_num = ARRAY_SIZE(os08a10_init_720p_4lane);
+	struct sensor_setting *pset;
+	char cmdbuf[8];
+	struct sensor_mode *mode = &os08a10_mode[OS08A10_MODE_720P30];
+	int i, r, test_pn = 0;
+	uint32_t value;
+	uint32_t hdr = 0, tmp;
+
+	// i2c config here
+	snr_bm_i2c_get_adap((void *)&adpt);
+	sinf->adpt = adpt;
+
+	adpt->slaveaddr = sinf->dev;
+	snr_bm_i2c_init(adpt);
+
+	bm_get_num("HDR OFF(0), HDR-DT(1), HDR-VC(2):", hdr);
+
+	switch(sensor_mode) {
+	case 0:
+		uartlog("1280x720 4 lanes\n");
+		sensor_set = os08a10_init_720p_4lane;
+		setting_num = ARRAY_SIZE(os08a10_init_720p_4lane);
+		break;
+	case 1:
+		if (!hdr) {
+			// linear
+			uartlog("1280x720 2 lanes\n");
+			sensor_set = os08a10_init_720p_2lane;
+			setting_num = ARRAY_SIZE(os08a10_init_720p_2lane);
+			writel(0x0a0c2040, 0x0);
+		} else if (hdr == 1) {
+			sinf->ishdr = true;
+			sinf->shsl.cur = OS08A10_DEFAULT_SHS;
+			// hdr-dt
+			uartlog("1280x720 2 lanes hdr-dt\n");
+			sensor_set = os08a10_init_720p_2lane_hdr_dt;
+			setting_num = ARRAY_SIZE(os08a10_init_720p_2lane_hdr_dt);
+			mode = &os08a10_mode[OS08A10_MODE_720P30_HDR_DT];
+			writel(0x0a0c2470, 0);
+			// enable the dt mode.
+			value = 0x01 | (0x2b<<4) | (0x2b<<12) | (0x19<<20);
+			writel(0x0a0c2474, value);
+                        // enable the csi hdr mode.
+                        value = readl(0x0a0c2408);
+                        value |= 0x01;
+                        writel(0x0a0c2408, value);
+		#if 0
+			// Config MAC HDR VSIZE and SHIFT(T2)
+			// Top line is 36, VSIZE = 720 + 36/2 = 738.
+			// Shift = dummy line + 36/2.
+			writel(0x0a0c2044, (738<<16) | 54);
+			// Enable HDR manual mode, hdr output inverse and S-SP HDR mode.
+			writel(0x0a0c2040, 0x0111);
+			writel(0x0a0c2048, 0x10024);
+			//hdr = 0;
+		#endif
+		} else {
+			uartlog("1280x720 2 lanes hdr-vc\n");
+			sensor_set = os08a10_init_720p_2lane_hdr_vc;
+			setting_num = ARRAY_SIZE(os08a10_init_720p_2lane_hdr_vc);
+			mode = &os08a10_mode[OS08A10_MODE_720P30_HDR_VC];
+			writel(0x0a0c2470, 0x10);
+                        // config the csi hdr vc mode.
+                        value = readl(0x0a0c2408);
+                        value &= ~0x02;
+                        value |= 0x01;
+                        writel(0x0a0c2408, value);
+		}
+		break;
+	default:
+		uartlog("unspport sensor format!\n");
+		return -1;
+	}
+
+	cmdbuf[0] = cmdbuf[1] = '0';
+	cli_readline("enable test pattern? [n/y]", cmdbuf);
+	if (cmdbuf[0] == 'y') {
+		test_pn = 1;
+	}
+
+	// i2c initial sequence
+	for (i = 0; i < setting_num; i++) {
+		pset = &(sensor_set[i]);
+
+		if (pset->addr == SNR_MARKER_DELAY) {
+			uartlog("sensor wr delay\n");
+			udelay(pset->val);
+			continue;
+		}
+		r = sinf->adpt->write(sinf->adpt, sinf->dev, pset->addr, sinf->alen, (uint8_t*)&(pset->val), 1);
+		if (r < 0)
+			uartlog("%s i2c_write fail addr[0x%x]\n", ctx->ptn->name, pset->addr);
+	}
+
+	value = test_pn ? OS081A0_TEST_PTN_COLOR_BAR : OS081A0_TEST_PTN_DISABLE;
+	r = sinf->adpt->write(sinf->adpt, sinf->dev, OS08A10_TEST_PATTERN_REG,
+			      sinf->alen, (uint8_t*)&value, 1);
+	if (r < 0)
+		uartlog("%s i2c_write fail addr[0x%x]\n", ctx->ptn->name, OS08A10_TEST_PATTERN_REG);
+
+
+	uartlog("Read back i2c registers:\n");
+	for (i = 0; i < setting_num; i++) {
+		uint16_t val = 0;
+
+		pset = &(sensor_set[i]);
+		r = sinf->adpt->read(sinf->adpt, sinf->dev, pset->addr, sinf->alen, (uint8_t*)&val, 1);
+
+		uartlog("reg[0x%x]=0x%x(0x%x)\n", pset->addr, val, pset->val);
+	}
+
+#if defined(CIF_DPHY_ENABLE)
+	// Switch the PHY type to MIPI-CSI
+	value = readl(0x0300B0F0);
+	value &= ~0x1;
+	writel(0x0300B0F0, value);
+	// Config the PHYD lane enable
+	value = readl(0x0300B028);
+	value &= ~0xFF000000;
+	writel(0x0300B028, value);
+	if (sensor_mode == 1)
+		value |= 0x03000000;
+	else
+		value |= 0x0f000000;
+	writel(0x0300B028, value);
+#endif
+
+	uartlog("streaming start\n");
+
+	cmdbuf[0] = cmdbuf[1] = '0';
+	cli_readline("run sensor to dram flow? [n/y]", cmdbuf);
+	if (cmdbuf[0] == 'y') {
+		uartlog("dump %d x %d \n", mode->total_w,
+				hdr==1?mode->total_h+sinf->shsl.cur+23:mode->total_h);
+		config_csibdg(mode->total_w,
+				hdr==1?mode->total_h+sinf->shsl.cur+23:mode->total_h,
+				ctx, !!hdr, 0);
+	}
+	return 0;
+}
+
+static int os08a10_intr(void *priv)
+{
+	uint32_t value;
+
+	value = readl(0x0a0c2460);
+	uartlog("csi status intr 0x%x\n", value);
+	// clear the interrupt status
+	value = readl(0x0a0c2404) | ((value&0xFF)<<8);
+	writel(0x0a0c2404, value);
+
+	return 0;
+}
+
+static int imx327_intr(void *priv)
+{
+	uint32_t value;
+
+	value = readl(0x0a0c2460);
+	//uartlog("csi status intr 0x%x\n", value);
+	// clear the interrupt status
+	value = readl(0x0a0c2404) | ((value&0xFF)<<8);
+	writel(0x0a0c2404, value);
+
+	value = readl(0x0a0880f8);
+	value ^= BIT(28);
+	writel(0x0a0880f8, value);
+	return 0;
+}
+
+static int as0142at_poweron(void *priv)
+{
+	pattern_ctx *ctx = (pattern_ctx *)priv;
+	char cmdbuf[8];
+	struct sensor_mode *mode = &ar0239_mode[AR0239_MODE_720P30];
+
+	uartlog("streaming start\n");
+
+	cmdbuf[0] = cmdbuf[1] = '0';
+	cli_readline("run sensor to dram flow? [n/y]", cmdbuf);
+	if (cmdbuf[0] == 'y') {
+		uartlog("dump %d x %d \n", mode->total_w, mode->total_h);
+		config_csibdg(mode->total_w, mode->total_h, ctx, 0, 1);
+	}
+	return 0;
+}
+
+#define IMX327_TEST_PATTERN_REG        0x308C
+#define IMX327_TEST_PTN_V_COLORBAR     0x21
+#if 0
+struct sensor_setting imx327_init_720p30_2lane[] = {
+	{0x3000, 0x01}, // STANDBY
+	{SNR_MARKER_DELAY, 3000}, // delay
+	{0x3005, 0x00}, // ADBIT 10bit
+	{0x3007, 0x10}, // VREVERS, ...
+	{0x3009, 0x02}, //
+	{0x300A, 0x3C}, // BLKLEVEL
+	//{0x300C, 0x00}, // WDMODE [0] 0:Normal, 1:DOL, WDSEL [5:4] 1:DOL 2 frames
+	{0x3011, 0x02},
+	{0x3014, 0x16}, // GAIN, 0x2A=>12.6dB TBD
+	{0x3018, 0xEE}, // VMAX[7:0]
+	{0x3019, 0x02}, // VMAX[15:8]
+	{0x301A, 0x00}, // VMAX[17:16]:=:0x301A[1:0]
+	{0x301C, 0xC8}, // HMAX[7:0], TBD
+	{0x301D, 0x19}, // HMAX[15:8]
+	{0x3020, 0x8C}, // SHS[7:0], TBD
+	{0x3021, 0x01}, // SHS[15:8]
+	{0x3022, 0x00}, // SHS[19:16]
+	//{0x3024, 0x00}, // SHS2[7:0], TBD
+	//{0x3025, 0x00}, // SHS2[15:8]
+	//{0x3026, 0x00}, // SHS2[19:16]
+	//{0x3030, 0x00}, // RHS1[7:0], TBD
+	//{0x3031, 0x00}, // RHS1[15:8]
+	//{0x3032, 0x00}, // RHS1[19:16]
+	//{0x3045, 0x00}, // DOLSCDEN [0] 1: pattern1 0: pattern2
+	// DOLSYDINFOEN[1] 1: embed the id code into 4th of sync
+	// code. 0: disable
+	// HINFOEN [2] 1: insert id code after 4th sync code 0: disable
+	{0x3046, 0x00},
+	{0x304B, 0x0A},
+	{0x305C, 0x20}, // INCKSEL1
+	{0x305D, 0x00}, // INCKSEL2
+	{0x305E, 0x20}, // INCKSEL3
+	{0x305F, 0x01}, // INCKSEL4
+	{0x309E, 0x4A},
+	{0x309F, 0x4A},
+	{0x30D2, 0x19},
+	{0x30D7, 0x03},
+	//{0x3106, 0x00}, //DOLHBFIXEN[7] 0: pattern1 1: pattern2
+	{0x3129, 0x1D},
+	{0x313B, 0x61},
+	{0x315E, 0x1A},
+	{0x3164, 0x1A},
+	{0x317C, 0x12},
+	{0x31EC, 0x37},
+	{0x3405, 0x10}, // Repetition
+	{0x3407, 0x01}, // physical_lane_nl
+	{0x3414, 0x04}, // opb_size_v
+	{0x3418, 0xD9}, // y_out_size
+	{0x3419, 0x02}, // y_out_size
+	{0x3441, 0x0A}, // csi_dt_fmt
+	{0x3442, 0x0A}, // csi_dt_fmt
+	{0x3443, 0x01}, // csi_lane_mode
+	{0x3444, 0x20}, // extck_freq
+	{0x3445, 0x25}, // extck_freq
+	{0x3446, 0x4F}, // tclkpost
+	{0x3447, 0x00}, // tclkpost
+	{0x3448, 0x2F}, // thszero
+	{0x3449, 0x00}, // thszero
+	{0x344A, 0x17}, // thsprepare
+	{0x344B, 0x00}, // thsprepare
+	{0x344C, 0x17}, // tclktrail
+	{0x344D, 0x00}, // tclktrail
+	{0x344E, 0x17}, // thstrail
+	{0x344F, 0x00}, // thstrail
+	{0x3450, 0x57}, // tclkzero
+	{0x3451, 0x00}, // tclkzero
+	{0x3452, 0x17}, // tclkprepare
+	{0x3453, 0x00}, // tckkprepare
+	{0x3454, 0x17}, // tlpx
+	{0x3455, 0x00}, // tlpx
+	{0x3472, 0x1C}, // x_out_size
+	{0x3473, 0x05}, // x_out_size
+	{0x3480, 0x49}, // incksel7
+	/* pattern gen */
+	//{IMX290_TEST_PATTERN_REG, 0x21},
+	//{IMX290_TEST_PATTERN_REG, 0x00},
+
+	{0x3000, 0x00}, // STANDBY
+	{SNR_MARKER_DELAY, 5000}, // delay
+	{0x3002, 0x00}, // XMSTA
+};
+#else
+struct sensor_setting imx327_init_720p30_2lane[] = {
+	{0x3003, 0x01}, // SW Reset
+	{SNR_MARKER_DELAY, 3000}, // delay
+	{0x3000, 0x01}, // STANDBY
+	{0x3001, 0x00}, // HOLD
+	{0x3002, 0x00}, // XMSTA
+	{0x3005, 0x00}, // ADBIT 10bit
+	{0x3007, 0x10}, // VREVERS, ...
+	{0x3009, 0x02}, //
+	{0x300A, 0x3C}, // BLKLEVEL
+	//{0x300C, 0x00}, // WDMODE [0] 0:Normal, 1:DOL, WDSEL [5:4] 1:DOL 2 frames
+	{0x3011, 0x02},
+	{0x3014, 0x16}, // GAIN, 0x2A=>12.6dB TBD
+	{0x3018, 0xEE}, // VMAX[7:0]
+	{0x3019, 0x02}, // VMAX[15:8]
+	{0x301A, 0x00}, // VMAX[17:16]:=:0x301A[1:0]
+	{0x301C, 0xC8}, // HMAX[7:0], TBD
+	{0x301D, 0x19}, // HMAX[15:8]
+	{0x3020, 0x8C}, // SHS[7:0], TBD
+	{0x3021, 0x01}, // SHS[15:8]
+	{0x3022, 0x00}, // SHS[19:16]
+	//{0x3024, 0x00}, // SHS2[7:0], TBD
+	//{0x3025, 0x00}, // SHS2[15:8]
+	//{0x3026, 0x00}, // SHS2[19:16]
+	//{0x3030, 0x00}, // RHS1[7:0], TBD
+	//{0x3031, 0x00}, // RHS1[15:8]
+	//{0x3032, 0x00}, // RHS1[19:16]
+	//{0x3045, 0x00}, // DOLSCDEN [0] 1: pattern1 0: pattern2
+	// DOLSYDINFOEN[1] 1: embed the id code into 4th of sync
+	// code. 0: disable
+	// HINFOEN [2] 1: insert id code after 4th sync code 0: disable
+	{0x3046, 0x00},
+	{0x304B, 0x0A},
+	{0x305C, 0x20}, // INCKSEL1
+	{0x305D, 0x00}, // INCKSEL2
+	{0x305E, 0x20}, // INCKSEL3
+	{0x305F, 0x01}, // INCKSEL4
+	{0x309E, 0x4A},
+	{0x309F, 0x4A},
+	{0x30D2, 0x19},
+	{0x30D7, 0x03},
+	//{0x3106, 0x00}, //DOLHBFIXEN[7] 0: pattern1 1: pattern2
+	{0x3129, 0x1D},
+	{0x313B, 0x61},
+	{0x315E, 0x1A},
+	{0x3164, 0x1A},
+	{0x317C, 0x12},
+	{0x31EC, 0x37},
+	{0x3405, 0x10}, // Repetition
+	{0x3407, 0x01}, // physical_lane_nl
+	{0x3414, 0x04}, // opb_size_v
+	{0x3418, 0xD9}, // y_out_size
+	{0x3419, 0x02}, // y_out_size
+	{0x3441, 0x0A}, // csi_dt_fmt
+	{0x3442, 0x0A}, // csi_dt_fmt
+	{0x3443, 0x01}, // csi_lane_mode
+	{0x3444, 0x20}, // extck_freq
+	{0x3445, 0x25}, // extck_freq
+	{0x3446, 0x4F}, // tclkpost
+	{0x3447, 0x00}, // tclkpost
+	{0x3448, 0x80}, // thszero
+	{0x3449, 0x00}, // thszero
+	{0x344A, 0x17}, // thsprepare
+	{0x344B, 0x00}, // thsprepare
+	{0x344C, 0x17}, // tclktrail
+	{0x344D, 0x00}, // tclktrail
+	{0x344E, 0x80}, // thstrail
+	{0x344F, 0x00}, // thstrail
+	{0x3450, 0x57}, // tclkzero
+	{0x3451, 0x00}, // tclkzero
+	{0x3452, 0x17}, // tclkprepare
+	{0x3453, 0x00}, // tckkprepare
+	{0x3454, 0x17}, // tlpx
+	{0x3455, 0x00}, // tlpx
+	{0x3472, 0x1C}, // x_out_size
+	{0x3473, 0x05}, // x_out_size
+	{0x3480, 0x49}, // incksel7
+	/* pattern gen */
+	//{IMX290_TEST_PATTERN_REG, 0x21},
+	//{IMX290_TEST_PATTERN_REG, 0x00},
+	{SNR_MARKER_DELAY, 3000}, // delay
+	{0x3000, 0x00}, // STANDBY
+};
+#endif
+static int imx327_poweron(void *priv)
+{
+	pattern_ctx *ctx = (pattern_ctx *)priv;
+	struct sensor_info *sinf = (struct sensor_info *)ctx->ptn->priv;
+	struct snr_i2c_adapter *adpt = NULL;
+	struct sensor_setting *sensor_set = imx327_init_720p30_2lane;
+	int setting_num = ARRAY_SIZE(imx327_init_720p30_2lane);
+	struct sensor_setting *pset;
+	struct sensor_mode *mode = &imx327_mode[IMX327_MODE_720P30];
+	char cmdbuf[8];
+	int i, r, test_pn = 0;
+	uint32_t value, hdr = 0, tmp;
+
+	disable_irq(CSIMAC0_INTR_NUM);
+	bm_get_num("HDR OFF(0), HDR-DT(1), HDR-VC(2):", hdr);
+
+	switch (hdr) {
+		case 0:
+			// linear
+			uartlog("1280x720 2 lanes\n");
+			writel(0x0a0c2040, 0x0);
+			mode = &imx327_mode[IMX327_MODE_720P30];
+			sensor_set = imx327_init_720p30_2lane;
+			setting_num = ARRAY_SIZE(imx327_init_720p30_2lane);
+			uartlog("use 720p30 2 lanes\n");
+			sinf->ishdr = false;
+			sinf->shsl.min = 1;
+			sinf->shsl.max = 0x2EC;
+			break;
+#if 0
+		case 1:
+			mode = &imx327_mode[IMX327_MODE_720P15_HDR1];
+			sensor_set = imx327_init_720p30_2lane_hdr1;
+			setting_num = ARRAY_SIZE(imx327_init_720p30_2lane_hdr1);
+			uartlog("use 720p30 2 lanes HDR Pattern 1\n");
+			sinf->ishdr = true;
+			sinf->shsl.min = IMX327_HDR1_RHS + 2;
+			sinf->shsl.max = IMX327_HDR1_VMAX*2 - 2;
+			sinf->shss.min = 2;
+			sinf->shss.max = IMX327_HDR1_RHS - 2;
+			break;
+		case 2:
+			mode = &imx327_mode[IMX327_MODE_720P15_HDR2];
+			sensor_set = imx327_init_720p30_2lane_hdr2;
+			setting_num = ARRAY_SIZE(imx327_init_720p30_2lane_hdr2);
+			uartlog("use 720p30 2 lanes HDR Pattern 2\n");
+			sinf->ishdr = true;
+			sinf->shsl.min = IMX327_HDR1_RHS + 2;
+			sinf->shsl.max = IMX327_HDR1_VMAX*2 - 2;
+			sinf->shss.min = 2;
+			sinf->shss.max = IMX327_HDR1_RHS - 2;
+			break;
+#endif
+		default:
+			uartlog("not support mode\n");
+			return -1;
+		}
+	cmdbuf[0] = cmdbuf[1] = '0';
+	cli_readline("enable test pattern? [n/y]", cmdbuf);
+	if (cmdbuf[0] == 'y') {
+		test_pn = 1;
+	}
+	// i2c config here
+	snr_bm_i2c_get_adap((void *)&adpt);
+	sinf->adpt = adpt;
+
+	adpt->slaveaddr = sinf->dev;
+	snr_bm_i2c_init(adpt);
+
+	// i2c initial sequence
+	for (i = 0; i < setting_num; i++) {
+		pset = &(sensor_set[i]);
+
+		if (pset->addr == SNR_MARKER_DELAY) {
+			uartlog("sensor wr delay\n");
+			udelay(pset->val);
+			continue;
+		}
+		if (pset->addr == IMX327_TEST_PATTERN_REG) {
+			if (test_pn)
+				pset->val = IMX327_TEST_PTN_V_COLORBAR;
+			else
+				pset->val = 0;
+		}
+		r = sinf->adpt->write(sinf->adpt, sinf->dev, pset->addr, sinf->alen, (uint8_t*)&(pset->val), 1);
+		if (r < 0)
+			uartlog("%s i2c_write fail addr[0x%x]\n", ctx->ptn->name, pset->addr);
+	}
+
+	uartlog("Read back i2c registers:\n");
+	for (i = 0; i < setting_num; i++) {
+		uint8_t val[2] = {0xFF};
+
+		pset = &(sensor_set[i]);
+
+		r = sinf->adpt->read(sinf->adpt, sinf->dev, pset->addr, sinf->alen, (uint8_t*)&(val[0]), 1);
+
+		uartlog("reg[0x%x]=0x%x(0x%x)\n", pset->addr, val[0], pset->val);
+	}
+
+#if defined(CIF_DPHY_ENABLE)
+	// Switch the PHY type to MIPI-CSI
+	value = readl(0x0300B0F0);
+	value &= ~0x1;
+	writel(0x0300B0F0, value);
+	// Config the PHYD lane enable
+	value = readl(0x0300B028);
+	value &= ~0xFF000000;
+	writel(0x0300B028, value);
+	value |= 0x03000000;
+	writel(0x0300B028, value);
+#endif
+	uartlog("streaming start\n");
+
+	cmdbuf[0] = cmdbuf[1] = '0';
+	cli_readline("run sensor to dram flow? [n/y]", cmdbuf);
+	if (cmdbuf[0] == 'y') {
+		uartlog("dump %d x %d \n", mode->total_w, mode->total_h);
+		config_csibdg(mode->total_w, mode->total_h, ctx,
+			      (hdr == 1 || hdr == 2), 0);
+	}
+	//enable_irq(CSIMAC0_INTR_NUM);
+
+	return 0;
+}
+
+static int peri_up_0(void *priv)
+{
+#define PWRPIN1V8_FORCE_LOW_BY_GPIO         (0)
+
+	char cmdbuf[8];
+	unsigned int *fpga_pwr_reg;
+	uint32_t value, tmp;
+
+
+	cmdbuf[0] = '0';
+	cli_readline("### enter to start power-on seqeuence. s) to skip : ", cmdbuf);
+	if (cmdbuf[0] == 's')
+		return 0;
+
+	bm_get_num("output 720P60-4L(default-0), 720P30-2L(1), 720P30-4L(2), 720P30-2LHDR1(3), 720P30-2LHDR2(4):", sensor_mode);
+	// power down/reset
+	// 1.2V = 1, 1.8V = 1, 2.9V = 1
+	// INCK on
+	// XCLR = 0
+	// wait 500ns, wait INCK stable
+	// XCLR = 1
+	// wait 20us
+
+	// enable display clk select
+	value = readl(0x0a0c8018);
+	value |= 0x02;
+	writel(0x0a0c8018, value);
+	udelay(5000);
+	fpga_pwr_reg = (unsigned int *)HARD_REG_FPGA_PWRPIN;
+
+#if (PWRPIN1V8_FORCE_LOW_BY_GPIO == 1)
+	// switch to gpio
+	writel(HARD_REG_I2C4_SCL, 0x4030);
+	writel(HARD_REG_I2C4_SDA, 0x4030);
+	// gpio output enable
+	writel(HARD_REG_GPIO1_OE, 0x6);
+	writel(HARD_REG_GPIO1_DAT, 0);
+
+	cli_readline("### switched i2c to gpio to pull low", cmdbuf);
+#endif
+
+	// for lane chk
+	tmp = (sensor_mode == 1 ||
+	       sensor_mode == 3 ||
+	       sensor_mode == 4) ? 0x3000 : 0xf000;
+	// power sequence
+	writel(fpga_pwr_reg, tmp);
+	uartlog("power-on delay\n");
+	udelay(5000);
+	writel(fpga_pwr_reg, tmp | 0x08);
+	uartlog("power-on delay\n");
+	udelay(5000);
+	writel(fpga_pwr_reg, tmp | 0x18);
+	uartlog("power-on delay\n");
+	udelay(5000);
+	writel(fpga_pwr_reg, tmp | 0x38);
+	uartlog("power-on delay\n");
+	udelay(5000);
+	// Switch the PHY type select
+	writel(0x0a0c2000, 0x00000f01);
+	if (sensor_mode == 1) { // 2-lane
+		// config sub-LVDS front porch
+		writel(0x0a0c2200, 0x000A0103);
+		writel(0x0a0c2230, 0x00000011);
+	} else if (sensor_mode == 3) { // 2-lane HDR pattern 1
+		// config sub-LVDS front porch
+		writel(0x0a0c2200, 0x000F1103);
+		writel(0x0a0c2218, 0x00040760);
+		writel(0x0a0c221C, 0x000801D4);
+		writel(0x0a0c2220, 0x040401D8);
+		writel(0x0a0c2224, 0x040805D4);
+		writel(0x0a0c2228, 0x000005D8);
+		writel(0x0a0c2230, 0x00000011);
+	} else if (sensor_mode == 4) { // 2-lane HDR pattern 2
+		// remove info line, only work for single and hdr pattern 2.
+		// must change the line count.
+		writel(0x0a0c2048, 0x00010001);
+		// config sub-LVDS front porch
+		writel(0x0a0c2200, 0x00043103);
+		writel(0x0a0c2218, 0x00040760);
+		writel(0x0a0c221C, 0x000801D4);
+		writel(0x0a0c2220, 0x040401D8);
+		writel(0x0a0c2224, 0x040805D4);
+		writel(0x0a0c2228, 0x000005D8);
+		writel(0x0a0c2250, 0x01DC000C);
+		writel(0x0a0c2254, 0x05DC040C);
+		// [29:16] HBLANK(per lane) [13:0] HSIZE
+		writel(0x0a0c2258, 0x029A028E);
+		writel(0x0a0c2230, 0x00000011);
+	} else {	// 4-lane
+		// config sub-LVDS front porch
+		writel(0x0a0c2200, 0x0006010f);
+		writel(0x0a0c2230, 0x00060013);
+	}
+	// enable RX PHY and debug
+	writel(fpga_pwr_reg, tmp | 0x07100039);
+	uartlog("power-on delay\n");
+
+#if (PWRPIN1V8_FORCE_LOW_BY_GPIO == 1)
+	// release output enable
+	writel(HARD_REG_GPIO1_OE, 0x0);
+	// switch to i2c_4
+	writel(HARD_REG_I2C4_SCL, 0x4000);
+	writel(HARD_REG_I2C4_SDA, 0x4000);
+#endif
+
+	uartlog("### device poweron\n");
+
+	return 0;
+}
+
+static int peri_down_0(void *priv)
+{
+	char cmdbuf[8] = {0};
+	unsigned int *fpga_pwr_reg;
+
+	fpga_pwr_reg = (unsigned int *)HARD_REG_FPGA_PWRPIN;
+
+	cli_readline("### power-off? y/n", cmdbuf);
+
+	if (cmdbuf[0] == 'y') {
+		// INCLK = 0
+		// XCLR = 0
+		// POWER-OFF sequence
+		if (sensor_mode == 1 ||
+		    sensor_mode == 3 ||
+		    sensor_mode == 4) { // 2-lane
+			writel(fpga_pwr_reg, 0x3018);
+			udelay(5000);
+			writel(fpga_pwr_reg, 0x3008);
+			udelay(5000);
+			writel(fpga_pwr_reg, 0x3000);
+			udelay(5000);
+		} else {
+			writel(fpga_pwr_reg, 0x0018);
+			udelay(5000);
+			writel(fpga_pwr_reg, 0x0008);
+			udelay(5000);
+			writel(fpga_pwr_reg, 0x0000);
+			udelay(5000);
+		}
+	}
+
+	return 0;
+}
+
+
+static int peri_up_1(void *priv)
+{
+	char cmdbuf[8];
+
+	cli_readline("todo peri_up_1", cmdbuf);
+
+	return 0;
+}
+
+
+static int peri_down_1(void *priv)
+{
+	char cmdbuf[8];
+
+	cli_readline("todo peri_down_1", cmdbuf);
+
+	return 0;
+}
+
+static int peri_up_2(void *priv)
+{
+
+	char cmdbuf[8];
+	unsigned int *fpga_pwr_reg;
+	uint32_t value;
+
+	cmdbuf[0] = '0';
+	cli_readline("### enter to start power-on seqeuence. s) to skip : ", cmdbuf);
+	if (cmdbuf[0] == 's')
+		return 0;
+
+	// power down/reset
+	// 1.2V = 1, 1.8V = 1, 2.9V = 1
+	// INCK on
+	// XCLR = 0
+	// wait 500ns, wait INCK stable
+	// XCLR = 1
+	// wait 20us
+
+	// enable display clk select
+	value = readl(0x0a0c8018);
+	value |= 0x02;
+	writel(0x0a0c8018, value);
+	udelay(5000);
+
+	fpga_pwr_reg = (unsigned int *)HARD_REG_FPGA_PWRPIN;
+#if 1
+	// power sequence
+	writel(fpga_pwr_reg, 0);
+	uartlog("power-on delay\n");
+	udelay(5000);
+	writel(fpga_pwr_reg, 0x08);
+	uartlog("power-on delay\n");
+	udelay(5000);
+	writel(fpga_pwr_reg, 0x18);
+	uartlog("power-on delay\n");
+	udelay(5000);
+	writel(fpga_pwr_reg, 0x38);
+	uartlog("power-on delay\n");
+	udelay(5000);
+#endif
+	// clear reset and enable phy rx
+	writel(fpga_pwr_reg, 0x27100039);
+	uartlog("### device poweron\n");
+
+	// Switch the PHY type select
+	writel(0x0a0c2000, 0x00000F01);
+	// HISPI mode enable
+	writel(0x0a0c2260, 0x00000001);
+	// config sub-LVDS 4 lanes, bit reverse, front porch
+	writel(0x0a0c2200, 0x0000050f);
+	writel(0x0a0c2230, 0x00000013);
+	return 0;
+}
+
+static int peri_down_2(void *priv)
+{
+	char cmdbuf[8] = {0};
+	unsigned int *fpga_pwr_reg;
+
+	fpga_pwr_reg = (unsigned int *)HARD_REG_FPGA_PWRPIN;
+
+	cli_readline("### power-off? y/n", cmdbuf);
+
+	if (cmdbuf[0] == 'y') {
+		// INCLK = 0
+		// XCLR = 0
+		// POWER-OFF sequence
+		uartlog("power-off");
+		writel(fpga_pwr_reg, 0x18);
+		udelay(5000);
+		writel(fpga_pwr_reg, 0x08);
+		udelay(5000);
+		writel(fpga_pwr_reg, 0);
+		udelay(5000);
+	}
+
+	return 0;
+}
+
+static int peri_up_3(void *priv)
+{
+
+	char cmdbuf[8];
+	unsigned int *fpga_pwr_reg;
+	uint32_t value;
+
+	cmdbuf[0] = '0';
+	cli_readline("### enter to start power-on seqeuence. s) to skip : ", cmdbuf);
+	if (cmdbuf[0] == 's')
+		return 0;
+
+	// power down/reset
+	// 1.2V = 1, 1.8V = 1, 2.9V = 1
+	// INCK on
+	// XCLR = 0
+	// wait 500ns, wait INCK stable
+	// XCLR = 1
+	// wait 20us
+
+	// enable display clk select
+	value = readl(0x0a0c8018);
+	value |= 0x02;
+	writel(0x0a0c8018, value);
+	udelay(5000);
+
+	// Switch the MAC type to TTL
+	writel(0x0a0c2000, 0x00000002);
+	// configure TTL [0] ttl enable [2:1] bit mode
+	writel(0x0a0c2010, 0x00000C05);
+	fpga_pwr_reg = (unsigned int *)HARD_REG_FPGA_PWRPIN;
+#if 1
+	// power sequence
+	writel(fpga_pwr_reg, 0);
+	uartlog("power-on delay\n");
+	udelay(5000);
+	writel(fpga_pwr_reg, 0x08);
+	uartlog("power-on delay\n");
+	udelay(5000);
+	writel(fpga_pwr_reg, 0x18);
+	uartlog("power-on delay\n");
+	udelay(5000);
+	writel(fpga_pwr_reg, 0x38);
+	uartlog("power-on delay\n");
+	udelay(5000);
+#endif
+	// clear reset and enable phy rx
+	writel(fpga_pwr_reg, 0x30100039);
+	uartlog("### device poweron\n");
+
+	return 0;
+}
+
+static int peri_down_3(void *priv)
+{
+	char cmdbuf[8] = {0};
+	unsigned int *fpga_pwr_reg;
+
+	fpga_pwr_reg = (unsigned int *)HARD_REG_FPGA_PWRPIN;
+
+	cli_readline("### power-off? y/n", cmdbuf);
+
+	if (cmdbuf[0] == 'y') {
+		// INCLK = 0
+		// XCLR = 0
+		// POWER-OFF sequence
+		uartlog("power-off");
+		writel(fpga_pwr_reg, 0x18);
+		udelay(5000);
+		writel(fpga_pwr_reg, 0x08);
+		udelay(5000);
+		writel(fpga_pwr_reg, 0);
+		udelay(5000);
+	}
+
+	return 0;
+}
+
+static int peri_up_4(void *priv)
+{
+
+	char cmdbuf[8];
+	unsigned int *fpga_pwr_reg;
+	uint32_t value, tmp;
+
+	cmdbuf[0] = '0';
+	cli_readline("### enter to start power-on seqeuence. s) to skip : ", cmdbuf);
+	if (cmdbuf[0] == 's')
+		return 0;
+
+	bm_get_num("output 720P60-4L(default-0), 720P30-2L(1)", sensor_mode);
+	// power down/reset
+	// 1.2V = 1, 1.8V = 1, 2.9V = 1
+	// INCK on
+	// XCLR = 0
+	// wait 500ns, wait INCK stable
+	// XCLR = 1
+	// wait 20us
+
+	// enable display clk select
+	value = readl(0x0a0c8018);
+	value |= 0x02;
+	writel(0x0a0c8018, value);
+	udelay(5000);
+
+	// Switch the MAC type to MIPI-CSI
+	writel(0x0a0c2000, 0x000000F0);
+	value = readl(0x0a0c2400);
+	// config lane number
+	if (sensor_mode == 1)
+		value |= 0x01;
+	else
+		value |= 0x03;
+	// config force video format
+	// value |= (0x8<<16) | (0x01<<13);
+	// Enable SOL
+	//value |= (0x1<<12);
+	writel(0x0a0c2400, value);
+	// config the vs gen mode.
+	writel(0x0a0c2470, 0x00);
+	fpga_pwr_reg = (unsigned int *)HARD_REG_FPGA_PWRPIN;
+#if 1
+	// power sequence
+	writel(fpga_pwr_reg, 0);
+	uartlog("power-on delay\n");
+	udelay(5000);
+	writel(fpga_pwr_reg, 0x08);
+	uartlog("power-on delay\n");
+	udelay(5000);
+	writel(fpga_pwr_reg, 0x18);
+	uartlog("power-on delay\n");
+	udelay(5000);
+	writel(fpga_pwr_reg, 0x38);
+	uartlog("power-on delay\n");
+	udelay(5000);
+#endif
+	// clear reset and enable phy rx
+	writel(fpga_pwr_reg, 0x32100039);
+	uartlog("### device poweron\n");
+
+	return 0;
+}
+
+static int peri_down_4(void *priv)
+{
+	char cmdbuf[8] = {0};
+	unsigned int *fpga_pwr_reg;
+
+	fpga_pwr_reg = (unsigned int *)HARD_REG_FPGA_PWRPIN;
+
+	cli_readline("### power-off? y/n", cmdbuf);
+
+	if (cmdbuf[0] == 'y') {
+		// INCLK = 0
+		// XCLR = 0
+		// POWER-OFF sequence
+		uartlog("power-off");
+		writel(fpga_pwr_reg, 0x18);
+		udelay(5000);
+		writel(fpga_pwr_reg, 0x08);
+		udelay(5000);
+		writel(fpga_pwr_reg, 0);
+		udelay(5000);
+	}
+
+	return 0;
+}
+
+static int peri_up_5(void *priv)
+{
+
+	char cmdbuf[8];
+	unsigned int *fpga_pwr_reg;
+	uint32_t value;
+
+	cmdbuf[0] = '0';
+	cli_readline("### enter to start power-on seqeuence. s) to skip : ", cmdbuf);
+	if (cmdbuf[0] == 's')
+		return 0;
+
+	// power down/reset
+	// 1.2V = 1, 1.8V = 1, 2.9V = 1
+	// INCK on
+	// XCLR = 0
+	// wait 500ns, wait INCK stable
+	// XCLR = 1
+	// wait 20us
+
+	// enable display clk select
+	value = readl(0x0a0c8018);
+	value |= 0x02;
+	writel(0x0a0c8018, value);
+	udelay(5000);
+
+	// Switch the MAC type to TTL
+	writel(0x0a0c2000, 0x00000002);
+	// configure TTL [0] ttl enable [2:1] bit mode
+	writel(0x0a0c2010, 0x00002421);
+	fpga_pwr_reg = (unsigned int *)HARD_REG_FPGA_PWRPIN;
+#if 0
+	// power sequence
+	writel(fpga_pwr_reg, 0);
+	uartlog("power-on delay\n");
+	udelay(5000);
+	writel(fpga_pwr_reg, 0x08);
+	uartlog("power-on delay\n");
+	udelay(5000);
+	writel(fpga_pwr_reg, 0x18);
+	uartlog("power-on delay\n");
+	udelay(5000);
+	writel(fpga_pwr_reg, 0x38);
+	uartlog("power-on delay\n");
+	udelay(5000);
+#endif
+	// clear reset and enable phy rx
+	writel(fpga_pwr_reg, 0x30100001);
+	uartlog("### device poweron\n");
+
+	return 0;
+}
+
+static int peri_down_5(void *priv)
+{
+	char cmdbuf[8] = {0};
+	unsigned int *fpga_pwr_reg;
+
+	fpga_pwr_reg = (unsigned int *)HARD_REG_FPGA_PWRPIN;
+
+	cli_readline("### power-off? y/n", cmdbuf);
+
+	if (cmdbuf[0] == 'y') {
+		// INCLK = 0
+		// XCLR = 0
+		// POWER-OFF sequence
+		uartlog("power-off");
+		writel(fpga_pwr_reg, 0x18);
+		udelay(5000);
+		writel(fpga_pwr_reg, 0x08);
+		udelay(5000);
+		writel(fpga_pwr_reg, 0);
+		udelay(5000);
+	}
+
+	return 0;
+}
+
+static int peri_up_6(void *priv)
+{
+
+	char cmdbuf[8];
+	unsigned int *fpga_pwr_reg;
+	uint32_t value;
+
+	cmdbuf[0] = '0';
+	cli_readline("### enter to start power-on seqeuence. s) to skip : ", cmdbuf);
+	if (cmdbuf[0] == 's')
+		return 0;
+
+	// power down/reset
+	// 1.2V = 1, 1.8V = 1, 2.9V = 1
+	// INCK on
+	// XCLR = 0
+	// wait 500ns, wait INCK stable
+	// XCLR = 1
+	// wait 20us
+
+#if 0
+	// enable display clk select
+	value = readl(0x0a0c8018);
+	value |= 0x02;
+	writel(0x0a0c8018, value);
+	udelay(5000);
+#endif
+
+	// Switch the MAC type to MIPI-CSI
+	writel(0x0a0c2000, 0x000000F0);
+	value = readl(0x0a0c2400);
+	// config lane number
+	value |= 0x01;
+	// config force video format
+	// value |= (0x8<<16) | (0x01<<13);
+	// Enable SOL
+	//value |= (0x1<<12);
+	writel(0x0a0c2400, value);
+	// config the vs gen mode.
+	writel(0x0a0c2470, 0x00);
+	fpga_pwr_reg = (unsigned int *)HARD_REG_FPGA_PWRPIN;
+#if 0
+	// power sequence
+	writel(fpga_pwr_reg, 0);
+	uartlog("power-on delay\n");
+	udelay(5000);
+	writel(fpga_pwr_reg, 0x08);
+	uartlog("power-on delay\n");
+	udelay(5000);
+	writel(fpga_pwr_reg, 0x18);
+	uartlog("power-on delay\n");
+	udelay(5000);
+	writel(fpga_pwr_reg, 0x38);
+	uartlog("power-on delay\n");
+	udelay(5000);
+#endif
+	// clear reset and enable phy rx
+	writel(fpga_pwr_reg, 0x02100000);
+	// writel(fpga_pwr_reg, 0x00100000);
+	uartlog("### device poweron\n");
+
+	return 0;
+}
+
+static int peri_down_6(void *priv)
+{
+	char cmdbuf[8] = {0};
+	unsigned int *fpga_pwr_reg;
+
+	fpga_pwr_reg = (unsigned int *)HARD_REG_FPGA_PWRPIN;
+
+	cli_readline("### power-off? y/n", cmdbuf);
+
+	if (cmdbuf[0] == 'y') {
+		// INCLK = 0
+		// XCLR = 0
+		// POWER-OFF sequence
+		uartlog("power-off");
+		writel(fpga_pwr_reg, 0x18);
+		udelay(5000);
+		writel(fpga_pwr_reg, 0x08);
+		udelay(5000);
+		writel(fpga_pwr_reg, 0);
+		udelay(5000);
+	}
+
+	return 0;
+}
+
+static int i2cloop(void *priv)
+{
+	pattern_ctx *ctx = (pattern_ctx *)priv;
+	struct sensor_info *sinf = (struct sensor_info *)ctx->ptn->priv;
+	struct snr_i2c_adapter *adpt = NULL;
+	uint32_t data = 0, wdat = 0, rdat = 0, addr;
+	char cmdbuf[8];
+	int r, cnt, loop = 1, val;
+	unsigned int *reg;
+
+	// i2c config here
+	snr_bm_i2c_get_adap((void *)&adpt);
+	sinf->adpt = adpt;
+
+#if 1
+	uartlog("current slave addr 0x%x\n", sinf->dev);
+
+	cmdbuf[0] = cmdbuf[1] = '0';
+	cli_readline("new slave addr? s for scan : ", cmdbuf);
+	if (cmdbuf[0] == 's') {
+		int devid;
+		cli_readline("enter addr : ", cmdbuf);
+		addr = _natoh(cmdbuf, 8);
+		for (devid = 0x00; devid < 0x80; devid++) {
+			uartlog("try read dev[0x%x] at 0x%x ===============\n", devid, addr)
+			data = 0;
+			r = sinf->adpt->read(sinf->adpt, devid, addr, 2, (uint8_t*)&(data), 1);
+			if (r == 0) {
+				sinf->dev = devid;
+				uartlog("###########################################\n");
+				uartlog("### matched slave addr: 0x%x reg[0x%x]=0x%x\n", devid, addr, data);
+				uartlog("###########################################\n");
+				break;
+			}
+		}
+	} else {
+		val = _natoh(cmdbuf, 2);
+		if (val) {
+			sinf->dev = val;
+			uartlog("updated slave addr: 0x%x\n", sinf->dev);
+		}
+	}
+	adpt->slaveaddr = sinf->dev;
+#endif
+
+#if 0
+	reg = (unsigned int *)(CONFIG_SYS_I2C_BASE + 0xA0);
+	val = readl(reg);
+	uartlog("current offset %p: 0x%x\n", reg, val);
+
+	cmdbuf[0] = cmdbuf[1] = '0';
+	cli_readline("new offset val? ", cmdbuf);
+	val = _natoh(cmdbuf, 2);
+	if (val) {
+		writel(reg, val);
+		uartlog("updated offset %p set 0x%x get 0x%x\n", reg, val, readl(reg));
+	}
+#else
+	(void)reg;
+#endif
+
+#if 1
+	uartlog("loop count %d:\n", loop);
+	cmdbuf[0] = cmdbuf[1] = '0';
+	cli_readline("new loop count? ", cmdbuf);
+	val = _natoi(cmdbuf, 6);
+	if (val) {
+		loop = val;
+		uartlog("updated loop count %d:\n", loop);
+	}
+#endif
+
+	snr_bm_i2c_init(adpt);
+
+	do {
+		char op;
+		cli_readline("### i2c r/w loop; enter e[x]it loop. [w]rite reg. [r]ead reg. : ", cmdbuf);
+		op = cmdbuf[0];
+
+		if (op == 'x')
+			break;
+
+		cli_readline("enter addr, [g] 0x3008 : ", cmdbuf);
+		switch (cmdbuf[0]) {
+		case 'g':
+			addr = 0x3008;
+			break;
+		case 'h':
+			addr = 0x3020;
+			break;
+		default:
+			addr = _natoh(cmdbuf, 8);
+			break;
+		}
+
+		for (cnt = 0; cnt < loop; cnt++) {
+			switch (op) {
+			case 'w':
+				cli_readline("enter hex val : ", cmdbuf);
+				wdat = _natoh(cmdbuf, 8);
+				rdat = 0x00;
+				uartlog("dev[0x%x] write 0x%x=0x%x ===============\n", sinf->dev, addr, wdat);
+				sinf->adpt->write(sinf->adpt, sinf->dev, addr, sinf->alen, (uint8_t*)&(wdat), sinf->dlen);
+				r = sinf->adpt->read(sinf->adpt, sinf->dev, addr, sinf->alen, (uint8_t*)&(rdat), sinf->dlen);
+				uartlog("dev[0x%x] read 0x%x %s 0x%x\n", sinf->dev, addr, (r ? "fail" : ":"), rdat);
+				break;
+			case 'r':
+			default:
+				uartlog("dev[0x%x] read 0x%x ===============\n", sinf->dev, addr)
+				data = 0;
+				r = sinf->adpt->read(sinf->adpt, sinf->dev, addr, sinf->alen, (uint8_t*)&(data), sinf->dlen);
+				uartlog("dev[0x%x] read 0x%x %s 0x%x\n", sinf->dev, addr, (r ? "fail" : ":"), data);
+				break;
+			}
+		}
+	} while (1);
+
+	return 0;
+}
+
+static int spiloop(void *priv)
+{
+	pattern_ctx *ctx = (pattern_ctx *)priv;
+	struct sensor_info *sinf = (struct sensor_info *)ctx->ptn->priv;
+	uint32_t data = 0, wdat = 0, addr;
+	char cmdbuf[8];
+	int r, cnt, loop = 1, val;
+
+	sinf->spi_adpt = snr_bm_spi_get_adpt(NULL);
+
+	sinf->spi_adpt->init(sinf->spi_adpt, sinf->dev, sinf->alen, 1);
+
+#if 1
+	uartlog("current slave addr 0x%x\n", sinf->dev);
+
+	cmdbuf[0] = cmdbuf[1] = '0';
+	cli_readline("new slave addr? s for scan : ", cmdbuf);
+	if (cmdbuf[0] == 's') {
+		int devid;
+		cli_readline("enter addr : ", cmdbuf);
+		addr = _natoh(cmdbuf, 8);
+		for (devid = 0x00; devid < 0x80; devid++) {
+			uartlog("try read dev[0x%x] at 0x%x ===============\n", devid, addr)
+			data = 0;
+			sinf->spi_adpt->slaveaddr = devid;
+			r = sinf->spi_adpt->read(sinf->spi_adpt, addr, (uint8_t*)&(data), 1);
+			if (r == 0) {
+				sinf->dev = devid;
+				uartlog("###########################################\n");
+				uartlog("### matched slave addr: 0x%x reg[0x%x]=0x%x\n", devid, addr, data);
+				uartlog("###########################################\n");
+				break;
+			}
+		}
+	} else {
+		val = _natoh(cmdbuf, 2);
+		if (val) {
+			sinf->dev = val;
+			uartlog("updated slave addr: 0x%x\n", sinf->dev);
+		}
+	}
+#endif
+
+#if 1
+	uartlog("loop count %d:\n", loop);
+	cmdbuf[0] = cmdbuf[1] = '0';
+	cli_readline("new loop count? ", cmdbuf);
+	val = _natoh(cmdbuf, 2);
+	if (val) {
+		loop = val;
+		uartlog("updated loop count %d:\n", loop);
+	}
+#endif
+
+	do {
+		char op;
+		cli_readline("### spi r/w loop; enter e[x]it loop. [w]rite reg. [r]ead reg. : ", cmdbuf);
+		op = cmdbuf[0];
+
+		if (op == 'x')
+			break;
+
+		addr = 0x6;
+
+		switch (op) {
+		case 'w':
+			cli_readline("enter wr data hex : ", cmdbuf);
+			wdat = _natoh(cmdbuf, 8);
+			for (cnt = 0; 1/*cnt < loop*/; cnt++) {
+				wdat = (cnt >> 8) & 0xFF;
+				uartlog("dev[0x%x] wr %d 0x%x=0x%x ===============\n", sinf->dev, cnt, addr, wdat);
+				sinf->spi_adpt->write(sinf->spi_adpt, addr, (uint8_t*)&(wdat), 1);
+
+				if (0) {
+					cli_readline("enter write data hex : ", cmdbuf);
+					wdat = _natoh(cmdbuf, 8);
+				}
+				udelay(100);
+			}
+			break;
+		case 'r':
+		default:
+			for (cnt = 0; cnt < loop; cnt++) {
+				uartlog("dev[0x%x] rd 0x%x ===============\n", sinf->dev, addr)
+				data = 0;
+				r = sinf->spi_adpt->read(sinf->spi_adpt, addr, (uint8_t*)&(data), 1);
+				uartlog("dev[0x%x] rd 0x%x %s 0x%x\n", sinf->dev, addr, (r ? "fail" : ":"), data);
+			}
+			break;
+		}
+	} while (1);
+
+	return 0;
+}
+
+

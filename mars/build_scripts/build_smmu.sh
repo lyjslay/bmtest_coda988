@@ -1,0 +1,1 @@
+cp -f ./boot/bm1882_ddr_smmu.lds ./boot/bm1882_ddr.lds ; make clean ; make TEST_CASE=smmu RUN_ENV=DDR BOARD=FPGA DEBUG=1

@@ -1,0 +1,1 @@
+make clean; make TEST_CASE=pwm RUN_ENV=DDR BOARD=FPGA DEBUG=1

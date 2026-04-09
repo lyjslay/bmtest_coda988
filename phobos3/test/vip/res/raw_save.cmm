@@ -1,0 +1,9 @@
+// save data of mem-range to the following file
+// 800x600 = 0x75300
+SaveBINary dump.yuv PM:0x96000000--0x96600000
+
+//SaveBINary y.bin PM:0x96000000--0x96100000
+//SaveBINary u.bin PM:0x97000000--0x97100000
+//SaveBINary v.bin PM:0x98000000--0x98100000
+
+print "raw saving complete..."

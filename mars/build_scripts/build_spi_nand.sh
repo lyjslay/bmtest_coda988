@@ -1,0 +1,1 @@
+make TEST_CASE=spi_nand BOARD=FPGA RUN_ENV=DDR

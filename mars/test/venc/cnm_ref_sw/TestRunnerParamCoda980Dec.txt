@@ -1,0 +1,21 @@
+default=0                        #Default Option test:
+                                 #default=0   off
+                                 #default=1   on
+                                 #-99 all random
+                                 
+secondary-axi=0                  #0b000000 ~ 0b111111(bit oring),                -99(random)
+stream-endian=1                  #0 ~ 3                                          -99(random)
+frame-endian=1                   #0 ~ 3                                          -99(random)
+bsmode=0                         #0:interrupt, 1:reserved, 2:pic_end             -99(random)
+cbcr_interleave_mode=0           #0:planar, 1:nv12, 2:nv21			             -99(random)
+
+map_type=0                       #0~8                                            -99(random)
+enable_wtl=0                     #0:disable, 1:enable                            -99(random)
+enable_tiled2linear=0            #0:disable, 1:enable                            -99(random)
+                                 #enable_tiled2linear and enable_wtl cannot be enabled
+                                 #at the same time.
+rotation=0                       #0, 90, 180, 270                                -99(random)
+mirror=0                         #0, 1(V), 2(H), 3(V-H)                          -99(random)
+deblock=0                        #0:disable, 1:enable, MPEG-4 only               -99(random)
+dering=0                         #0:disable, 1:enable, MPEG-2/4 only             -99(random)
+

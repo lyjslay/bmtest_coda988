@@ -1,0 +1,2 @@
+gcc -g -std=c99 extract.c -o extract -lm
+gcc -g -std=c99 combine.c -o combine -lm

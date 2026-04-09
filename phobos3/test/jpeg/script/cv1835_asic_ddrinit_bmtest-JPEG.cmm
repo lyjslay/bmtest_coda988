@@ -1,0 +1,41 @@
+do cv1835_core_reset.cmm
+
+data.load.elf cv1835_ASIC_ddr3_1866_C002DAC.elf
+;data.load.elf cv1835_ASIC_ddr3_1866_odt_C002948.elf
+;data.load.elf cv1835_ASIC_ddr3_2133_C00291C.elf
+;data.load.elf cv1835_ASIC_ddr3_1066_C00291C.elf
+gotostart
+DELeteBreak
+SetBREAK 0xC002DAC %HW
+go
+wait !isrun()
+
+wait 100.ms
+DELeteBreak
+
+
+
+
+; efuse option
+Data.Set PM:0xb030010 %long 0
+
+; clear bitsteram buffer
+;MWriteS32 PM:0x113200000--PM:0x113220000 0x0
+;MWriteS32 PM:0x113300000--PM:0x113320000 0x0
+
+; Decoder
+; Load stream
+LoadBINARY    Z:\home\arena\projects\cv1835\build\cv1835_ddr_init_and_run_bmtest\dec.jpg PM:0x10C000000
+;LoadBINARY    Z:\home\arena\projects\cv1835\build\cv1835_ddr_init_and_run_bmtest\enc-6-2.264 PM:0x10B000000
+;LoadBINARY    Z:\home\arena\projects\cv1835\build\cv1835_ddr_init_and_run_bmtest\enc1-1.265 PM:0x10B000000
+;LoadBINARY    Z:\home\arena\projects\cv1835\build\cv1835_ddr_init_and_run_bmtest\enc6-4.265 PM:0x10B000000
+
+; Encoder
+;LoadBINARY    Z:\home\arena\projects\cv1835\build\cv1835_ddr_init_and_run_bmtest\2_yuv420.yuv PM:0x109000000
+LoadBINARY    Z:\home\arena\projects\cv1835\build\cv1835_ddr_init_and_run_bmtest\2_yuv420.yuv PM:0x119000000
+
+; Load elf
+data.load.elf Z:\home\arena\projects\cv1835\build\cv1835_ddr_init_and_run_bmtest\bm1882_ASIC_jpeg.elf
+
+;go
+gotostart

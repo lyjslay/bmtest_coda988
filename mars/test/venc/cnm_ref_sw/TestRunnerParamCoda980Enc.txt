@@ -1,0 +1,16 @@
+default=0                       #Default Option test:
+                                #default=0   off
+                                #default=1   on
+                                #-99 all random
+                                
+secondary-axi=0                 #0 ~ 63,                                        -99(random)
+stream-endian=0                 #0 ~ 3,                                         -99(random)
+frame-endian=0                  #0 ~ 3,                                         -99(random)
+rotAngle=0                      #0, 90, 180, 270,                               -99(random)
+mirDir=0                        #0 ~ 3,                                         -99(random)
+maptype=0                       #0~8,                                           -99(random)
+enable_linear2tiled=0           #0: disable, 1: enable                          -99(random)
+bsmode=0                        #0: ringbuffer, 1: linebuffer                   -99(random)
+linebuf_int=0                   #0: disable linebuffer full interrupt           -99(random)
+cbcr_interleave_mode=0          #0:planar, 1:nv12, 2:nv21                       -99(random)
+

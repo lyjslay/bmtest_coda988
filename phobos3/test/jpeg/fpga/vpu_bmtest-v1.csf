@@ -1,0 +1,4 @@
+LoadBinary Z:\home\arena\projects\commit\u-boot\examples\bmtest\bm1880\test\jpeg\fpga\test.264 0x10C100000
+
+LoadBinary Z:\home\arena\projects\commit\u-boot\examples\bmtest\bm1880\test\jpeg\fpga\test.md5 0x10CB00000
+

@@ -1,0 +1,50 @@
+obj/vdi.o: vdi/nonos/vdi.c \
+ /media/cvitek/yijun.liu01/host-tools/gcc/riscv64-elf-x86_64/riscv64-unknown-elf/include/stdio.h \
+ /media/cvitek/yijun.liu01/host-tools/gcc/riscv64-elf-x86_64/riscv64-unknown-elf/include/_ansi.h \
+ /media/cvitek/yijun.liu01/host-tools/gcc/riscv64-elf-x86_64/riscv64-unknown-elf/include/newlib.h \
+ /media/cvitek/yijun.liu01/host-tools/gcc/riscv64-elf-x86_64/riscv64-unknown-elf/include/_newlib_version.h \
+ /media/cvitek/yijun.liu01/host-tools/gcc/riscv64-elf-x86_64/riscv64-unknown-elf/include/sys/config.h \
+ /media/cvitek/yijun.liu01/host-tools/gcc/riscv64-elf-x86_64/riscv64-unknown-elf/include/machine/ieeefp.h \
+ /media/cvitek/yijun.liu01/host-tools/gcc/riscv64-elf-x86_64/riscv64-unknown-elf/include/sys/features.h \
+ /media/cvitek/yijun.liu01/host-tools/gcc/riscv64-elf-x86_64/riscv64-unknown-elf/include/sys/cdefs.h \
+ /media/cvitek/yijun.liu01/host-tools/gcc/riscv64-elf-x86_64/riscv64-unknown-elf/include/machine/_default_types.h \
+ /media/cvitek/yijun.liu01/host-tools/gcc/riscv64-elf-x86_64/lib/gcc/riscv64-unknown-elf/10.2.0/include/stddef.h \
+ /media/cvitek/yijun.liu01/host-tools/gcc/riscv64-elf-x86_64/lib/gcc/riscv64-unknown-elf/10.2.0/include/stdarg.h \
+ /media/cvitek/yijun.liu01/host-tools/gcc/riscv64-elf-x86_64/riscv64-unknown-elf/include/sys/reent.h \
+ /media/cvitek/yijun.liu01/host-tools/gcc/riscv64-elf-x86_64/riscv64-unknown-elf/include/_ansi.h \
+ /media/cvitek/yijun.liu01/host-tools/gcc/riscv64-elf-x86_64/riscv64-unknown-elf/include/sys/_types.h \
+ /media/cvitek/yijun.liu01/host-tools/gcc/riscv64-elf-x86_64/riscv64-unknown-elf/include/machine/_types.h \
+ /media/cvitek/yijun.liu01/host-tools/gcc/riscv64-elf-x86_64/riscv64-unknown-elf/include/sys/lock.h \
+ /media/cvitek/yijun.liu01/host-tools/gcc/riscv64-elf-x86_64/riscv64-unknown-elf/include/sys/types.h \
+ /media/cvitek/yijun.liu01/host-tools/gcc/riscv64-elf-x86_64/riscv64-unknown-elf/include/sys/_stdint.h \
+ /media/cvitek/yijun.liu01/host-tools/gcc/riscv64-elf-x86_64/riscv64-unknown-elf/include/machine/endian.h \
+ /media/cvitek/yijun.liu01/host-tools/gcc/riscv64-elf-x86_64/riscv64-unknown-elf/include/machine/_endian.h \
+ /media/cvitek/yijun.liu01/host-tools/gcc/riscv64-elf-x86_64/riscv64-unknown-elf/include/sys/select.h \
+ /media/cvitek/yijun.liu01/host-tools/gcc/riscv64-elf-x86_64/riscv64-unknown-elf/include/sys/_sigset.h \
+ /media/cvitek/yijun.liu01/host-tools/gcc/riscv64-elf-x86_64/riscv64-unknown-elf/include/sys/_timeval.h \
+ /media/cvitek/yijun.liu01/host-tools/gcc/riscv64-elf-x86_64/riscv64-unknown-elf/include/sys/timespec.h \
+ /media/cvitek/yijun.liu01/host-tools/gcc/riscv64-elf-x86_64/riscv64-unknown-elf/include/sys/_timespec.h \
+ /media/cvitek/yijun.liu01/host-tools/gcc/riscv64-elf-x86_64/riscv64-unknown-elf/include/sys/_pthreadtypes.h \
+ /media/cvitek/yijun.liu01/host-tools/gcc/riscv64-elf-x86_64/riscv64-unknown-elf/include/sys/sched.h \
+ /media/cvitek/yijun.liu01/host-tools/gcc/riscv64-elf-x86_64/riscv64-unknown-elf/include/machine/types.h \
+ /media/cvitek/yijun.liu01/host-tools/gcc/riscv64-elf-x86_64/riscv64-unknown-elf/include/sys/stdio.h \
+ /media/cvitek/yijun.liu01/host-tools/gcc/riscv64-elf-x86_64/riscv64-unknown-elf/include/stdlib.h \
+ /media/cvitek/yijun.liu01/host-tools/gcc/riscv64-elf-x86_64/riscv64-unknown-elf/include/machine/stdlib.h \
+ /media/cvitek/yijun.liu01/host-tools/gcc/riscv64-elf-x86_64/riscv64-unknown-elf/include/alloca.h \
+ vdi/nonos/../vdi.h vdi/nonos/../mm.h vpuapi/vpuconfig.h \
+ vpuapi/../config.h vpuapi/vputypes.h \
+ /media/cvitek/yijun.liu01/host-tools/gcc/riscv64-elf-x86_64/lib/gcc/riscv64-unknown-elf/10.2.0/include/stdint.h \
+ /media/cvitek/yijun.liu01/host-tools/gcc/riscv64-elf-x86_64/riscv64-unknown-elf/include/stdint.h \
+ /media/cvitek/yijun.liu01/host-tools/gcc/riscv64-elf-x86_64/riscv64-unknown-elf/include/sys/_intsup.h \
+ vdi/nonos/../datastructure.h vdi/nonos/../vdi_osal.h \
+ /media/cvitek/yijun.liu01/host-tools/gcc/riscv64-elf-x86_64/riscv64-unknown-elf/include/ctype.h \
+ /media/cvitek/yijun.liu01/host-tools/gcc/riscv64-elf-x86_64/riscv64-unknown-elf/include/sys/_locale.h \
+ vdi/nonos/../vdi_osal.h vdi/nonos/../mm.h vpuapi/coda9/coda9_regdefine.h \
+ vpuapi/coda9/../../config.h vpuapi/wave/common/common_regdefine.h \
+ vpuapi/wave/wave4/wave4_regdefine.h vpuapi/vpuapi.h vpuapi/vpuconfig.h \
+ vpuapi/vputypes.h vpuapi/../vdi/vdi.h vpuapi/../vdi/vdi_osal.h \
+ vpuapi/vpuerror.h vpuapi/coda9/980_roi_rc_lib/util_float.h \
+ vpuapi/coda9/980_roi_rc_lib/hevc_enc_rc.h \
+ vpuapi/coda9/980_roi_rc_lib/util_float.h \
+ vpuapi/coda9/980_roi_rc_lib/frm_rc.h \
+ vpuapi/coda9/980_roi_rc_lib/hevc_enc_rc.h

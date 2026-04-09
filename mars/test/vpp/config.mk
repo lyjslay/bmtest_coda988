@@ -1,0 +1,11 @@
+ifeq ($(DEBUG), 1)
+CFLAGS += -O0
+endif
+
+ifneq ($(SLT_TEST), )
+CFLAGS += -DSLT_TEST -DCALC_MD5 -DRANDOM_INPUT
+endif
+
+ifneq ($(SLT_TEST_CASE), )
+CFLAGS += -DSLT_TEST -DCALC_MD5 -DRANDOM_INPUT
+endif

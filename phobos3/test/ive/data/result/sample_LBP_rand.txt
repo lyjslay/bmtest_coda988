@@ -1,0 +1,2 @@
+enMOde = 0, un8BitThr = 41
+enMOde = 1, un8BitThr = 35

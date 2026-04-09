@@ -1,0 +1,10 @@
+..\\data\\img\\cnn\\cnn_img\\0\\1067.jpg
+..\\data\\img\\cnn\\cnn_img\\1\\39.jpg
+..\\data\\img\\cnn\\cnn_img\\2\\630.jpg
+..\\data\\img\\cnn\\cnn_img\\3\\620.jpg
+..\\data\\img\\cnn\\cnn_img\\4\\8.jpg
+..\\data\\img\\cnn\\cnn_img\\5\\582.jpg
+..\\data\\img\\cnn\\cnn_img\\6\\10.jpg
+..\\data\\img\\cnn\\cnn_img\\7\\265.jpg
+..\\data\\img\\cnn\\cnn_img\\8\\864.jpg
+..\\data\\img\\cnn\\cnn_img\\9\\573.jpg

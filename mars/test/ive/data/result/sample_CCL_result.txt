@@ -1,0 +1,2 @@
+RegionNum = 39, CurAreaThr = 4
+RegionNum = 242, CurAreaThr = 56

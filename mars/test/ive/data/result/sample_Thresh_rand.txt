@@ -1,0 +1,8 @@
+enMode = 0: u8LowThr =  41, u8HighThr = 105, u8Min Mid Max (190, 132, 225)
+enMode = 1: u8LowThr = 169, u8HighThr = 210, u8Min Mid Max (174, 82, 144)
+enMode = 2: u8LowThr =  95, u8HighThr = 241, u8Min Mid Max (241, 187, 233)
+enMode = 3: u8LowThr = 236, u8HighThr = 249, u8Min Mid Max (166, 219, 60)
+enMode = 4: u8LowThr =   6, u8HighThr = 169, u8Min Mid Max (62, 153, 36)
+enMode = 5: u8LowThr = 142, u8HighThr = 162, u8Min Mid Max (28, 6, 183)
+enMode = 6: u8LowThr =  92, u8HighThr = 140, u8Min Mid Max (179, 18, 77)
+enMode = 7: u8LowThr =  22, u8HighThr =  60, u8Min Mid Max (187, 139, 166)

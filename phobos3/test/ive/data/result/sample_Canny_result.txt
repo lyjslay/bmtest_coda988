@@ -1,0 +1,2 @@
+u16LowThr = 42
+u16LowThr = 108

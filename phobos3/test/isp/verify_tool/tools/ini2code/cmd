@@ -1,0 +1,6 @@
+rm register.cfg
+rm aaa.cfg
+./run_para_parsing.pl register.list /media/cvitek/xiaole.chen/downloadbD9J7224836/register_from_de/register.fm
+cat hw_register.cfg >> aaa.cfg
+cat register.cfg >> aaa.cfg
+python test_cft2header_v2.py

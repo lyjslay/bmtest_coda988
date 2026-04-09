@@ -1,0 +1,149 @@
+Project Name,BM1882,,,,,,,,,,,,,,,,,,,,
+Sub system,video_subsystem,,,,,,,,,,,,,,,,,,,,
+Module Name,vc_fab,,,,,,,,,,,,,,,,,,,,
+Address Width,8,,,,,,,,,,,,,,,,,,,,
+Main Clock,pclk,,,,,,,,,,,,,,,,,,,,
+Second Clock,,,,,,,,,,,,,,,,,,,,,
+Main Reset,rstn,,,,,,,,,,,,,,,,,,,,
+Second Reset,,,,,,,,,,,,,,,,,,,,,
+File Version,V 1.0.00,,,,,,,,,,,,,,,,,,,,
+Creation Date,6/6/2018,,,,,,,,,,,,,,,,,,,,
+Base Address,hB030000,,,,,,,,,,,,,,,,,,,,
+//,,,,,,,,,,,,,,,,,,,,,
+// Begin,,,,,,,,,,,,,,,,,,,,,
+Reg High Address,Reg Low Address,Register Name,Short Description,Register Description,Reset,Field Name,MSB,LSB,Bits,Init,r/w,Field Description,Mask,check value,shadow,shadow ctrl,shadow read,cross clock,cross rst,group,Low_Power_Golden
+h00,h00,VC_FAB_REG_0,VC_FAB_Setting_0,,rstn,reg_a2x_awresize,5,4,2,h3,rw,"a2x awresize config
+[0]:jpeg
+[1]:h264_pri
+",,,,,,,,,0
+,,,,,rstn,reg_a2x_arresize,9,8,2,h3,rw,"a2x arresize config
+[0]:jpeg
+[1]:h264_pri
+",,,,,,,,,0
+,,,,,rstn,reg_awcache1_rewrite,13,12,2,h3,rw,"a2x awcache bit 1 rewrite enable
+[0]:jpeg
+[1]:h264_pri
+",,,,,,,,,0
+,,,,,rstn,reg_arcache1_rewrite,17,16,2,h3,rw,"a2x arcache bit 1 rewrite enable
+[0]:jpeg
+[1]:h264_pri
+",,,,,,,,,0
+,,,,,rstn,reg_awcache1,21,20,2,h3,rw,"a2x awcache bit 1 rewrite value
+[0]:jpeg
+[1]:h264_pri
+",,,,,,,,,0
+,,,,,rstn,reg_arcache1,25,24,2,h3,rw,"a2x arcache bit 1 rewrite value
+[0]:jpeg
+[1]:h264_pri
+",,,,,,,,,0
+h04,h04,VC_FAB_REG_1,VC_FAB_Setting_1,,rstn,reg_ck_coef_h26x,4,0,5,h10,rw,"h265/h264 core clock coffecient
+5'b1xxxx: full_speed 
+5'b0xxxx: clock = full_speed * [3:0] >> 4",,,,,,,,,0
+,,,,,rstn,reg_ck_h264_en,16,16,1,h0,ro,H264 clock is enabled,,,,,,,,,0
+,,,,,rstn,reg_ck_h265_en,17,17,1,h0,ro,H265 clock is enabled,,,,,,,,,0
+,,,,,rstn,reg_ck_coef_jpeg,24,20,5,h10,rw,"clk_jpeg coffecient
+5'b1xxxx: full_speed 
+5'b0xxxx: clock = full_speed * [3:0] >> 4",,,,,,,,,0
+h08,h08,VC_FAB_REG_2,VC_FAB_Setting_2,,rstn,reg_dummy,31,0,32,h00ff,rw,dummy registers,,,,,,,,,0
+h0c,h0c,VC_FAB_REG_3,VC_FAB_Setting_3,,rstn,reg_h264_lbuf_size,31,0,32,h6,ro,h264 line buffer size,,,,,,,,,0
+h10,h10,VC_FAB_REG_4,VC_FAB_Setting_4,,rstn,reg_vc_bsram_en,0,0,1,h0,rw,enable h264 line buffer control by CPU,,,,,,,,,0
+,,,,,rstn,reg_vc_bsram_stop,1,1,1,h0,rw,stop h264 line buffer control by CPU,,,,,,,,,0
+,,,,,rstn,reg_vc_sm_soft_rstn,2,2,1,h1,rw,share memory soft resetn,,,,,,,,,0
+,,,,,rstn,reg_ip_aclk_en_force,3,3,1,h0,rw,force ip aclk active,,,,,,,,,0
+,,,,,rstn,reg_busy_disable,15,15,1,h0,rw,"0: disable fabric clock  lp mode  while ip is on working
+1: fabric clock lp mode while fabric is not busy",,,,,,,,,0
+,,,,,rstn,reg_vc_bsram_stop_rdy,16,16,1,h0,ro,Stop h264 line buffer control is ready,,,,,,,,,0
+,,,,,rstn,reg_h26x_idle_ck_coef,28,24,5,h10,rw,clk_h26x coffecient whille h26x is idle and reg_h26x_idle_ck_slow_en=1,,,,,,,,,0
+h14,h14,VC_FAB_REG_5,VC_FAB_Setting_5,debug ,rstn,reg_vgop_debug,31,0,32,h6,ro,debug,,,,,,,,,0
+h18,h18,VC_FAB_REG_6,VC_FAB_Setting_6,,rstn,reg_boot_code_sz,31,0,32,h80,ro,"Boot code sram size, default 128KB",,,,,,,,,0
+h1C,h1C,VC_FAB_REG_7,VC_FAB_Setting_7,,rstn,reg_h264_sec_axi_mem_sz,31,0,32,h80,ro,H264 SEC AXI memory size (byte),,,,,,,,,0
+h20,h20,VC_FAB_REG_8,VC_FAB_Setting_8,,rstn,reg_h265_sec_axi_mem_sz,31,0,32,h80,ro,H265 SEC AXI memory size (byte),,,,,,,,,0
+h24,h24,VC_FAB_REG_9,VC_FAB_Setting_9,,rstn,reg_en_h264_codec,0,0,1,h0,rw,enable h264 Codec,,,,,,,,,0
+,,,,,rstn,reg_en_h265_codec,1,1,1,h0,rw,enable h265 Codec,,,,,,,,,0
+,,,,,rstn,reg_en_h264_dec,8,8,1,h0,rw,enable h264 Decoder,,,,,,,,,0
+h28,h28,VC_FAB_REG_10,VC_FAB_Setting_10,,rstn,reg_h265_adr_msb_ow_en,0,0,1,h0,rw,,,,,,,,,,0
+,,,,,rstn,reg_h264_adr_msb_ow_en,1,1,1,h0,rw,,,,,,,,,,
+,,,,,rstn,reg_jpeg_adr_msb_ow_en,2,2,1,h0,rw,,,,,,,,,,
+,,,,,rstn,reg_h265_adr_msb_ow,3,3,1,h0,rw,,,,,,,,,,
+,,,,,rstn,reg_h264_adr_msb_ow,4,4,1,h0,rw,,,,,,,,,,0
+,,,,,rstn,reg_jpeg_adr_msb_ow,5,5,1,h0,rw,,,,,,,,,,0
+h30,h30,VC_FAB_REG_30,VC_FAB_Setting_30,,rstn,reg_dis_fab_lp_opt ,7,0,8,h0,rw,fabric  lp opt disable ,,,,,,,,,0
+h34,h34,VC_FAB_REG_34,VC_FAB_Setting_34,,rstn,reg_h264_cg_dis,31,0,32,h0,rw,,,,,,,,,,0
+h38,h38,VC_FAB_REG_38,VC_FAB_Setting_38,,rstn,reg_h265_cg_dis,31,0,32,h0,rw,,,,,,,,,,0
+h40,h40,VC_FAB_REG_40,VC_FAB_Setting_40,,rstn,reg_h264_mmu_ena,1,0,2,h3,rw,"H264 MMU enable
+0: bit31
+1: bit30
+2: bit29
+3: disable",,,,,,,,,0
+,,,,,rstn,reg_h264_mmu_ofs_ena,3,3,1,h0,rw,,,,,,,,,,
+,,,,,rstn,reg_h264_mmu_pg_sz,5,4,2,h0,rw,"H264 MMU Page Size
+0: 128KB
+1: 256KB
+2: 512KB
+3: 1MB",,,,,,,,,0
+,,,,,rstn,reg_h265_mmu_ena,17,16,2,h3,rw,"H265 MMU enable
+0: bit31
+1: bit30
+2: bit29
+3: disable",,,,,,,,,0
+,,,,,,reg_h265_mmu_ofs_ena,18,18,1,h0,rw,,,,,,,,,,
+,,,,,rstn,reg_h265_mmu_pg_sz,21,20,2,h0,rw,"H265 MMU Page Size
+0: 128KB
+1: 256KB
+2: 512KB
+3: 1MB",,,,,,,,,0
+h44,h44,VC_FAB_REG_44,VC_FAB_Setting_44,,rstn,reg_h264_sbm_cg_en,0,0,1,h0,rw,H264 Slice buffer mode clock gate enable,,,,,,,,,0
+,,,,,rstn,reg_h264_sbm_cg_div_upd,4,4,1,h0,w1p,H264 Slice buffer mode clock divisor update,,,,,,,,,0
+,,,,,rstn,reg_h264_sbm_cg_div,10,8,3,h0,rw,"H264 Slice buffer mode clock divisor
+0: 1, disable
+1: 1/2
+2: 1/4
+3: 1/8
+4: 1/16",,,,,,,,,
+,,,,,rstn,reg_h265_sbm_cg_en,16,16,1,h0,rw,H265 Slice buffer mode clock gate enable,,,,,,,,,0
+,,,,,rstn,reg_h265_sbm_cg_div_upd,20,20,1,h0,w1p,H264 Slice buffer mode clock divisor update,,,,,,,,,0
+,,,,,rstn,reg_h265_sbm_cg_div,26,24,3,h0,rw,"H265 Slice buffer mode clock divisor
+0: 1, disable
+1: 1/2
+2: 1/4
+3: 1/8
+4: 1/16",,,,,,,,,
+h48,h48,VC_FAB_SAXI_0,VC_FAB_SAXI_0,,rstn,reg_bypass_priority,0,0,1,h0,rw,,,,,,,,,,0
+,,,,,rstn,reg_saxi_mode,1,1,1,h0,rw,,,,,,,,,,0
+,,,,,rstn,reg_aw_extra_store_en,2,2,1,h0,rw,,,,,,,,,,0
+h4C,h4C,VC_FAB_SAXI_1,VC_FAB_SAXI_1,,rstn,reg_rqos_map_level1,3,0,4,h1,rw,,,,,,,,,,0
+,,,,,rstn,reg_rqos_map_level2,7,4,4,h1,rw,,,,,,,,,,0
+,,,,,rstn,reg_r_hp_max_act_window,31,16,16,hffff,rw,,,,,,,,,,0
+h50,h50,VC_FAB_SAXI_2,VC_FAB_SAXI_2,,rstn,reg_r_np_max_act_window,15,0,16,h1,rw,,,,,,,,,,0
+,,,,,rstn,reg_r_lp_max_act_window,31,16,16,h1,rw,,,,,,,,,,0
+h54,h54,VC_FAB_SAXI_3,VC_FAB_SAXI_3,,rstn,reg_wqos_map_level1,3,0,4,h0,rw,,,,,,,,,,0
+,,,,,rstn,reg_wqos_map_level2,7,4,4,h0,rw,,,,,,,,,,0
+,,,,,rstn,reg_w_hp_max_act_window,31,16,16,hffff,rw,,,,,,,,,,0
+h58,h58,VC_FAB_SAXI_4,VC_FAB_SAXI_4,,rstn,reg_w_np_max_act_window,15,0,16,hffff,rw,,,,,,,,,,0
+,,,,,rstn,reg_w_lp_max_act_window,31,16,16,hffff,rw,,,,,,,,,,0
+h5C,h5C,VC_FAB_SAXI_5,VC_FAB_SAXI_5,,rstn,reg_jpeg_aw_qos,7,0,8,h8,rw,,,,,,,,,,0
+,,,,,rstn,reg_jpeg_ar_qos,15,8,8,h8,rw,,,,,,,,,,
+,,,,,rstn,reg_h264_aw_qos,23,16,8,h8,rw,,,,,,,,,,
+,,,,,rstn,reg_h264_ar_qos,31,24,8,h8,rw,,,,,,,,,,0
+h80,h80,VC_FAB_REG_32,VC_FAB_Setting_32,,rstn,reg_video_dec_format,7,0,8,h1,ro,"Support Video decoder format
+0: H264
+1: HEVC",,,,,,,,,0
+,,,,,rstn,reg_video_enc_format,15,8,8,h3,ro,"Support Video encoder format
+0: H264
+1: HEVC",,,,,,,,,0
+,,,,,rstn,reg_max_video_dec_cap,23,16,8,h1,ro,"Max. video decoder capability
+0: FHD30P
+1: FHD60P
+2: FHD120P/4K30
+3: FHD150P/4K45
+4: FHD240P/4K60",,,,,,,,,0
+,,,,,rstn,reg_max_video_enc_cap,31,24,8,h1,ro,"Max. video encoder capability
+0: FHD30P
+1: FHD60P
+2: FHD120P/4K30
+3: FHD150P/4K45
+4: FHD240P/4K60",,,,,,,,,0
+h84,h84,VC_FAB_BND,VC_FAB_BND,,rstn,reg_vc_sys_bond,31,0,32,hffff,ro,,,,,,,,,,0
+h88,h88,VC_FAB_DBG_88,VC_FAB_DBG_88,,rstn,reg_vc_fab_31_0,31,0,32,hffff,ro,,,,,,,,,,0
+h8c,h8c,VC_FAB_DBG_8C,VC_FAB_DBG_8C,,rstn,reg_vc_fab_63_32,31,0,32,hffff,ro,,,,,,,,,,0
+// End,,,,,,,,,,,,,,,,,,,,,

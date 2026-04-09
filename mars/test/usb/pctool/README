@@ -1,0 +1,53 @@
+1. To run bulk/ctrl function test, please run "gen_patterns.sh" to generate the
+   test patterns.
+2. Apply below patch to enlarge the memory:
+
+diff --git a/bm1882/boot/bm1882_ddr.lds b/bm1882/boot/bm1882_ddr.lds
+index 9d64062..c0c351b 100755
+--- a/bm1882/boot/bm1882_ddr.lds
++++ b/bm1882/boot/bm1882_ddr.lds
+@@ -3,7 +3,7 @@ ENTRY(start)
+ 
+ MEMORY
+ {
+-	sdram (xrw)      : ORIGIN = 0x100000000, LENGTH = 0xA800000
++	sdram (xrw)      : ORIGIN = 0x100000000, LENGTH = 0xC800000
+ }
+ 
+ STACK_SIZE = DEFINED(STACK_SIZE) ? STACK_SIZE : 0x100000;
+diff --git a/bm1882/include/fw_config.h b/bm1882/include/fw_config.h
+index f308955..9e04fd2 100644
+--- a/bm1882/include/fw_config.h
++++ b/bm1882/include/fw_config.h
+@@ -19,7 +19,7 @@
+ #ifdef USE_NPU_LIB
+ #define CONFIG_HEAP_SIZE                (4*1024*1024)
+ #else
+-#define CONFIG_HEAP_SIZE                (2*1024*1024)
++#define CONFIG_HEAP_SIZE                (8*1024*1024)
+ //#define CONFIG_HEAP_SIZE                (64*1024)
+ #endif
+ #endif
+
+
+then run:
+
+Run "make TEST_CASE=usb TEST_INDEX=1  BOARD=FPGA RUN_ENV=DDR DEBUG=1
+MEM_REMAP=1 NEW_DMA=1" to build the ctrl app.
+
+Run "make TEST_CASE=usb TEST_INDEX=2  BOARD=FPGA RUN_ENV=DDR DEBUG=1
+MEM_REMAP=1 NEW_DMA=1" to build the bulk app.
+
+Run "make TEST_CASE=usb TEST_INDEX=10  BOARD=FPGA RUN_ENV=DDR DEBUG=1
+MEM_REMAP=1 NEW_DMA=1" to build the bulk app for suspend/resume/remote wakeup.
+
+3. Make sure libusb-1.0-dev and pyusb is installed in host PC (Ubuntu).
+
+4. Run "python bm1880v2_pure_ctrl.py" to test below cases:
+   a. control transfer with 0B, 1B, 64B, 67B, 131B, 64 + 0B packet.
+   b. stall test for data-in, data-out and status phase.
+
+5. Run "python bm1880v2_pure_bulk.py" to test below cases:
+   a. bulk transfer with 0B, 1B, 2561B, 3072B, 3073B, 65536B, 66048B, 66049B
+      and 8388608 packet.
+   b. stall test for bulk-out and bulk-in.

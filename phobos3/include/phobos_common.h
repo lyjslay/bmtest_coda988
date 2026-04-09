@@ -1,0 +1,37 @@
+#ifndef _BM1882_COMMON_H_
+#define _BM1882_COMMON_H_
+
+#define SEC_BASE            0x02000000
+#define TOP_BASE            0x03000000
+
+#define SPACC_BASE          (SEC_BASE + 0x00060000)
+#define TRNG_BASE           (SEC_BASE + 0x00070000)
+#define SEC_DBG_I2C_BASE    (SEC_BASE + 0x00080000)
+#define FAB_FIREWALL_BASE   (SEC_BASE + 0x00090000)
+#define DDR_FIREWALL_BASE   (SEC_BASE + 0x000A0000)
+
+#define PINMUX_BASE         (TOP_BASE + 0x1000)
+#define TEMPSEN_BASE        (TOP_BASE + 0xE0000)
+#define CLKGEN_BASE         (TOP_BASE + 0x00002000)
+#define UART0_BASE          0x04140000
+#define UART1_BASE          0x04150000
+#define UART2_BASE          0x04160000
+#define UART3_BASE          0x04170000
+#define UART4_BASE          0x041C0000
+#define PWR_UART_BASE       0x05022000
+#define GPIO0_BASE          0x03020000
+#define GPIO1_BASE          0x03021000
+#define GPIO2_BASE          0x03022000
+#define GPIO3_BASE          0x03023000
+#define PWR_GPIO_BASE       0x05021000
+#define SRAM_BASE           0x0E000000
+
+#define REG_CLK_ENABLE_REG0       (CLKGEN_BASE)
+#define REG_CLK_ENABLE_REG1       (CLKGEN_BASE + 0x4)
+#define REG_CLK_BYPASS_SEL_REG      (CLKGEN_BASE + 0x30)
+#define REG_CLK_BYPASS_SEL_REG2      (CLKGEN_BASE + 0x34)
+#define REG_CLK_DIV0_CTL_CA53_REG   (CLKGEN_BASE + 0x40)
+#define REG_CLK_DIV0_CTL_CPU_AXI0_REG (CLKGEN_BASE + 0x48)
+#define REG_CLK_DIV0_CTL_TPU_AXI_REG  (CLKGEN_BASE + 0x54)
+#define REG_CLK_DIV0_CTL_TPU_FAB_REG  (CLKGEN_BASE + 0x5C)
+#endif

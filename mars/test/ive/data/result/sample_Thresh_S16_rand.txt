@@ -1,0 +1,4 @@
+enMode = 0: s16LowThr =  41, s16HighThr = 105, s8Min Mid Max (-63, -5, -98)
+enMode = 1: s16LowThr = 108, s16HighThr = 111, s8Min Mid Max (-47, 82, -17)
+enMode = 2: s16LowThr =  73, s16HighThr = 191, u8Min Mid Max (241, 187, 233)
+enMode = 3: s16LowThr = 235, s16HighThr = 251, u8Min Mid Max (166, 219, 60)
