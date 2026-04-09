@@ -48,4 +48,8 @@ obj/coda9.o: vpuapi/coda9/coda9.c vpuapi/coda9/coda9_vpuconfig.h \
  vpuapi/coda9/980_roi_rc_lib/hevc_enc_rc.h vpuapi/vpuapifunc.h \
  vpuapi/coda9/coda9_regdefine.h vpuapi/coda9/../../config.h \
  cvi/cvi_enc_internal.h sample/helper/main_helper.h config.h testargv.h \
- vpuapi/vpuapifunc.h vpuapi/vpuapi.h vdi/vdi.h
+ vpuapi/vpuapifunc.h vpuapi/vpuapi.h vdi/vdi.h \
+ ../../../include/system_common.h ../../../include/bmtest_type.h \
+ ../../../include/fw_config.h ../../../include/marsrv_common.h \
+ ../../../include/mars_ip_rst.h ../../../include/mars_pinlist_swconfig.h \
+ ../../../include/mars_reg_fmux_gpio.h

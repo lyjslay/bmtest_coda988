@@ -17,6 +17,7 @@
 #include "product.h"
 #include "coda9_regdefine.h"
 #include "cvi_enc_internal.h"
+#include "system_common.h"
 
 static void LoadBitCode(Uint32 coreIdx, PhysicalAddress codeBase, const Uint16 *codeWord, int codeSize)
 {
@@ -362,6 +363,7 @@ Int32 Coda9VpuWaitInterrupt(CodecInst* handle, Int32 timeout)
 
     if (reason != INTERRUPT_TIMEOUT_VALUE) {
         VpuWriteReg(handle->coreIdx, BIT_INT_CLEAR, 1);		// clear HW signal
+        enable_irq(21);
     }
 
     return reason;

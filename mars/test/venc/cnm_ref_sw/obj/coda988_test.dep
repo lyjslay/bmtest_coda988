@@ -52,4 +52,8 @@ obj/coda988_test.o: sample/coda988_test.c \
  vpuapi/coda9/980_roi_rc_lib/hevc_enc_rc.h sample/helper/main_helper.h \
  config.h testargv.h vpuapi/vpuapi.h cvi/cvi_enc_internal.h vdi/vdi.h \
  vpuapi/coda9/coda9_regdefine.h vpuapi/coda9/../../config.h \
- sample/coda988_test.h
+ sample/coda988_test.h ../../../include/system_common.h \
+ ../../../include/bmtest_type.h ../../../include/fw_config.h \
+ ../../../include/marsrv_common.h ../../../include/mars_ip_rst.h \
+ ../../../include/mars_pinlist_swconfig.h \
+ ../../../include/mars_reg_fmux_gpio.h

@@ -48,6 +48,33 @@ static Uint16*              pusBitCode;
 unsigned int    YUV_ADDR           = 0x84000000;
 size_t           YUV_TOTAL_BYTES    = 1 * 1024 * 1024; // 1MB
 
+
+
+#include "system_common.h"
+#define VPU_IRQ_NUM         21
+
+#define VPU_BIT_INT_REASON_ADDR  (0x0B010000 + 0x174)
+#define VPU_BIT_INT_CLEAR_ADDR   (0x0B010000 + 0x00C)
+
+static int vpu_irq_handler(int irqn, void *priv)
+{
+    volatile unsigned int *int_reason = (volatile unsigned int *)VPU_BIT_INT_REASON_ADDR;
+    volatile unsigned int *int_clear  = (volatile unsigned int *)VPU_BIT_INT_CLEAR_ADDR;
+    unsigned int reason = *int_reason;
+
+    printf("[VPU IRQ] CPU get coda988 VPU intr(%d), BIT_INT_REASON = 0x%08x\n", irqn, reason);
+    disable_irq(VPU_IRQ_NUM);
+
+    return 0;
+}
+
+void vpu_irq_init(void)
+{
+    request_irq(VPU_IRQ_NUM, vpu_irq_handler, 0, "vpu", NULL);
+    cpu_enable_irqs();
+    printf("[VPU IRQ] registered irq %d\n", VPU_IRQ_NUM);
+}
+
 #define VC_FAB_BASE_ADDR        0x0B030000
 #define VC_FAB_REG_4            0x10
 #define VC_FAB_REG_9            0x24
@@ -1765,6 +1792,8 @@ Int32 coda988_test(TestArgV_t *argv)
     }
     pusBitCode = (Uint16*)firmware8;
     firmware8 = NULL;
+
+    vpu_irq_init();
 
     if (showVersion) {
         Uint32   ver, rev;

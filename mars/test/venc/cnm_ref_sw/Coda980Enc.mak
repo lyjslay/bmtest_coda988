@@ -66,7 +66,7 @@ CC  = $(CROSS_CC_PREFIX)gcc
 CXX = $(CROSS_CC_PREFIX)g++
 AR  = $(CROSS_CC_PREFIX)ar
 
-INCLUDES = -I./vpuapi  -I./sample/helper -I./vdi -I./cvi
+INCLUDES = -I./vpuapi  -I./sample/helper -I./vdi -I./cvi -I../../../include
 DEFINES += -DCODA980
 CFLAGS  = -I. -Wno-unused-result -Wno-format -Wl,--fatal-warning $(INCLUDES) $(DEFINES)
 ARFLAGS = rcs
