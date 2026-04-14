@@ -56,6 +56,13 @@ typedef struct _TestArgV_t {
     int svcEnable;    // 0: disable, 1: enable SVC-T (temporal scalability)
     int mvcEnable;    // 0: disable, 1: enable MVC (spatial scalability)
 
+    // SBM param
+    int sbmEnable;      // 0: frame mode, 1: SBM
+    int sbMode;         // 0: bypass 1: free run 2: vip sync 3: sw
+    int sbmNb;          // number of slice-buffer slots (ring depth)
+    int sbmSize;        // slice height: 0 = 64 lines, 1 = 128 lines
+    // int sb_ybase            // sb_uvbase are derived from the source frame address at runtime
+
     // TODO: 添加另外的參數，需要在SyncParamFromTestArgV中同步給EncOpenparam
 } TestArgV_t;
 

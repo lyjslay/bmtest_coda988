@@ -51,10 +51,9 @@ size_t           YUV_TOTAL_BYTES    = 1 * 1024 * 1024; // 1MB
 
 
 #include "system_common.h"
-#define VPU_IRQ_NUM         21
-
-#define VPU_BIT_INT_REASON_ADDR  (0x0B010000 + 0x174)
-#define VPU_BIT_INT_CLEAR_ADDR   (0x0B010000 + 0x00C)
+#define VPU_IRQ_NUM 21
+#define VPU_BIT_INT_REASON_ADDR (0x0B010000 + 0x174)
+#define VPU_BIT_INT_CLEAR_ADDR (0x0B010000 + 0x00C)
 
 static int vpu_irq_handler(int irqn, void *priv)
 {
@@ -74,6 +73,218 @@ void vpu_irq_init(void)
     cpu_enable_irqs();
     printf("[VPU IRQ] registered irq %d\n", VPU_IRQ_NUM);
 }
+
+
+// step : SBM settings from v410
+// note: sbm寄存器在mars和p3上有差异，这里用宏定义区分
+#define MARS    1
+#define P3      0
+
+#define VC_SBM_BASE_ADDR 0x0B058000
+
+#define SBM_REG_CTRL            0x00
+#define SBM_REG_SW_WPTR         0x0C
+#define SBM_REG_DUMMY_PUSH      0x14
+#define SBM_REG_PRI_SLICE_CNT   0x20
+#define SBM_REG_PRI_STRIDE      0x24
+
+#define SBM_REG_PRI_SRC_YBASE   0x28
+#define SBM_REG_PRI_SRC_YEND    0x2C
+#define SBM_REG_PRI_SB_YBASE    0x30
+#define SBM_REG_PRI_SRC_UVBASE  0x34
+#define SBM_REG_PRI_SRC_UVEND   0x38
+#define SBM_REG_PRI_SB_UVBASE   0x3C
+// ro reg
+#define SBM_REG_HW_WPTR_RB      0x80
+#define SBM_REG_HW_WPTR         0x88
+#define SBM_REG_90              0x90
+#define SBM_REG_PUSH_POP_STAT   0x94
+
+static inline void SBM_WRITE(Uint32 offset, Uint32 val)
+{
+    volatile Uint32 *reg = (volatile Uint32 *)(unsigned long)(VC_SBM_BASE_ADDR + offset);
+    *reg = val;
+}
+
+static inline Uint32 SBM_READ(Uint32 offset)
+{
+    volatile Uint32 *reg = (volatile Uint32 *)(unsigned long)(VC_SBM_BASE_ADDR + offset);
+    return *reg;
+}
+
+//cviVEncResetSb() in main_enc_cvitest.c
+static void coda988_sbm_reset(void)
+{
+    Uint32 val;
+
+    printf("[SBM] before sw reset: 0x00=0x%08x 0x80=0x%08x 0x84=0x%08x "
+           "0x88=0x%08x 0x90=0x%08x 0x94=0x%08x\n",
+           SBM_READ(SBM_REG_CTRL),
+           SBM_READ(SBM_REG_HW_WPTR_RB),
+           SBM_READ(0x84),
+           SBM_READ(SBM_REG_HW_WPTR),
+           SBM_READ(SBM_REG_90),
+           SBM_READ(SBM_REG_PUSH_POP_STAT));
+
+    //!!! Mars: bit[1] = sbc1 is for H264 sw_reset P3: bit[0] = sbc0 is for H264
+    val = SBM_READ(SBM_REG_CTRL);
+#if MARS
+    val |= (1 << 1);
+#elif P3
+    val |= (1 << 0);
+#endif
+    SBM_WRITE(SBM_REG_CTRL, val);
+    printf("[SBM] after  reset: 0x00=0x%08x 0x80=0x%08x 0x84=0x%08x "
+           "0x88=0x%08x 0x90=0x%08x 0x94=0x%08x\n",
+           SBM_READ(SBM_REG_CTRL),
+           SBM_READ(SBM_REG_HW_WPTR_RB),
+           SBM_READ(0x84),
+           SBM_READ(SBM_REG_HW_WPTR),
+           SBM_READ(SBM_REG_90),
+           SBM_READ(SBM_REG_PUSH_POP_STAT));
+}
+
+// After setup, call coda988_sbm_start() to set the frm_start bit,
+// then coda988_sbm_push_all_slices() to advance the SW wptr.
+static void coda988_sbm_setup(Uint32 sb_mode, Uint32 sb_nb, Uint32 sb_size,
+                               PhysicalAddress sb_ybase, PhysicalAddress sb_uvbase,
+                               Uint32 y_stride, Uint32 uv_stride,
+                               Uint32 src_height)
+{
+    Uint32 reg;
+    Uint32 srcHeightAlign;
+
+    /* ---- REG 0x00: sb_mode / sb_size / sb_nb ---- */
+    reg = SBM_READ(SBM_REG_CTRL);
+    reg &= ~0xFF00FFF0;
+    //note: 这里只有h264 sb_mode的位有差异, size和nb的位和mars的一样
+#if MARS
+    reg |= (sb_mode   << 8);
+#elif P3
+    reg |= (sb_mode   << 4);
+#endif
+    reg |= (sb_size   << 17);              /* sb_size */
+    reg |= (sb_nb     << 24);              /* sb_nb */
+    SBM_WRITE(SBM_REG_CTRL, reg);
+    printf("[SBM] 0x00 = 0x%08x (sb_mode=%u, sb_size=%u, sb_nb=%u)\n",
+           SBM_READ(SBM_REG_CTRL), sb_mode, sb_size, sb_nb);
+
+
+    // if sw mode, Read current hw wptr from 0x80[20:16] for Mars or [4:0] for P3, to get next frame wptr
+    // And set Register 0x0c,
+    if (sb_mode == 3){
+#if MARS
+        Uint32 wptr = (SBM_READ(SBM_REG_HW_WPTR_RB) >> 16) & 0x1F;
+#elif P3
+        Uint32 wptr = (SBM_READ(SBM_REG_HW_WPTR_RB) >> 0) & 0x1F;
+#endif
+        reg = SBM_READ(SBM_REG_SW_WPTR);
+        reg = (reg & 0xFFFFFFE0) | wptr;
+        SBM_WRITE(SBM_REG_SW_WPTR, reg);
+        printf("[SBM] 0x0C = 0x%08x (sw_wptr=%u)\n",
+               SBM_READ(SBM_REG_SW_WPTR), wptr);
+    }
+
+    if (sb_ybase != 0 && sb_uvbase != 0) {
+        // REG 0x20: slice count config
+        reg = ((src_height + 63) >> 6) << 22;
+        SBM_WRITE(SBM_REG_PRI_SLICE_CNT, reg);
+        printf("[SBM] 0x20 = 0x%08x (slice_cnt=%u)\n",
+            SBM_READ(SBM_REG_PRI_SLICE_CNT), (src_height + 63) >> 6);
+
+        // REG 0x24: stride config
+        reg = ((y_stride  >> 4) << 4) | ((uv_stride >> 4) << 20);
+        SBM_WRITE(SBM_REG_PRI_STRIDE, reg);
+        printf("[SBM] 0x24 = 0x%08x (y_stride=%u uv_stride=%u)\n",
+            SBM_READ(SBM_REG_PRI_STRIDE), y_stride, uv_stride);
+
+        // REG 0x28: src Y base (virtual ring window)
+        SBM_WRITE(SBM_REG_PRI_SRC_YBASE, 0x80000000);
+        printf("[SBM] 0x28 = 0x%08x (src_ybase)\n", SBM_READ(SBM_REG_PRI_SRC_YBASE));
+
+        // REG 0x2C: src Y end
+        srcHeightAlign = ((src_height + 15) >> 4) << 4;
+        SBM_WRITE(SBM_REG_PRI_SRC_YEND, 0x80000000 + srcHeightAlign * y_stride);
+        printf("[SBM] 0x2C = 0x%08x (src_yend)\n", SBM_READ(SBM_REG_PRI_SRC_YEND));
+
+        // REG 0x30: sb Y base (physical DDR)
+        SBM_WRITE(SBM_REG_PRI_SB_YBASE, (Uint32)sb_ybase);
+        printf("[SBM] 0x30 = 0x%08x (sb_ybase)\n", SBM_READ(SBM_REG_PRI_SB_YBASE));
+
+        // REG 0x34: src UV base (virtual ring window)
+        SBM_WRITE(SBM_REG_PRI_SRC_UVBASE, 0x88000000);
+        printf("[SBM] 0x34 = 0x%08x (src_uvbase)\n", SBM_READ(SBM_REG_PRI_SRC_UVBASE));
+
+        // REG 0x38: src UV end
+        SBM_WRITE(SBM_REG_PRI_SRC_UVEND, 0x88000000 + srcHeightAlign * y_stride / 2);
+        printf("[SBM] 0x38 = 0x%08x (src_uvend)\n", SBM_READ(SBM_REG_PRI_SRC_UVEND));
+
+        // REG 0x3C: sb UV base (physical DDR)
+        SBM_WRITE(SBM_REG_PRI_SB_UVBASE, (Uint32)sb_uvbase);
+        printf("[SBM] 0x3C = 0x%08x (sb_uvbase)\n", SBM_READ(SBM_REG_PRI_SB_UVBASE));
+    }
+}
+
+
+// cviVEncStartSb() / cviVEncStartSbMode() in main_enc_cvitest.c.
+// !!! 每一帧都要start
+static void coda988_sbm_start(void)
+{
+    Uint32 reg = SBM_READ(SBM_REG_CTRL);
+#if MARS
+    reg |= (1 << 11);   // sbc1 H264 frm_start
+#elif P3
+    reg |= (1 << 7);   // sbc0 H264 frm_start
+#endif
+    SBM_WRITE(SBM_REG_CTRL, reg);
+    printf("[SBM] 0x00 = 0x%08x (frm_start set)\n", SBM_READ(SBM_REG_CTRL));
+}
+
+// for test, write all slice in DDR, use sw mode to sync ptr.
+// no hw wptr read, write the final total_slices value directly to 0x0C
+static Uint32 coda988_sbm_push_all_slices(Uint32 sb_size, Uint32 src_height)
+{
+    Uint32 lines_per_slice = (sb_size == 0) ? 64 : 128;
+    Uint32 total_slices    = (src_height + lines_per_slice - 1) / lines_per_slice;
+    Uint32 reg;
+
+    reg = SBM_READ(SBM_REG_SW_WPTR);
+    reg = (reg & 0xFFFFFFE0u) | (total_slices & 0x1Fu);
+    SBM_WRITE(SBM_REG_SW_WPTR, reg);
+
+    printf("[SBM] push all: total_slices=%u lines_per_slice=%u height=%u "
+           "0x0C=0x%08x 0x94=0x%08x\n",
+           total_slices, lines_per_slice, src_height,
+           SBM_READ(SBM_REG_SW_WPTR),
+           SBM_READ(SBM_REG_PUSH_POP_STAT));
+    return total_slices;
+}
+
+
+//poll until the encoder has consumed all slices, see pop_cnt_pri in REG 0x94[21:16].
+static int coda988_sbm_wait_done(Uint32 total_slices, Uint32 timeout_ms)
+{
+    Uint32 i;
+    for (i = 0; i < timeout_ms; i++) {
+        Uint32 stat    = SBM_READ(SBM_REG_PUSH_POP_STAT);
+        Uint32 pop_cnt = (stat >> 16) & 0x3Fu;//[21:16]
+        if (pop_cnt >= total_slices) {
+            printf("[SBM] done: push=%u pop=%u\n", stat & 0x3Fu, pop_cnt);
+            return 0;
+        }
+        { volatile Uint32 timeout; for (timeout = 0; timeout < 10000u; timeout++) { (void)d; } }
+    }
+    printf("[SBM] timeout! 0x94=0x%08x pop=%u expected=%u\n",
+           SBM_READ(SBM_REG_PUSH_POP_STAT),
+           (SBM_READ(SBM_REG_PUSH_POP_STAT) >> 16) & 0x3Fu,
+           total_slices);
+    return -1;
+}
+
+
+
+
+// step: vc top reg for clock open
 
 #define VC_FAB_BASE_ADDR        0x0B030000
 #define VC_FAB_REG_4            0x10
@@ -590,7 +801,7 @@ static int _cviVEncRegFrameBuffer( EncHandle handle,
 		aft = i;
 		ber = aft + 1;
         // note: framebufsize是一帧完整的yuv的大小，chr_size是单个u或单个v的大小
-        // note: 这里相当于分配一帧完整的Y+UV，加上单独的一个UV，luma是single的（共享的）
+        // note: 这里相当于分配一帧完整的Y+UV，加上单独的一个UV，luma是共享的
         pVbReconFrameMem[ber].size = FrameBufSize + chr_size * 2; // YUV + UV
         // memset(ionName, 0, MAX_VPU_ION_BUFFER_NAME);
         // sprintf(ionName, "VENC_%d_ReconFrameBuf", pCodecInst->s32ChnNum);
@@ -1349,6 +1560,42 @@ FILED_ENCODE:
         encParam.sourceFrame->sourceLBurstEn = FALSE;
 
         RcChangeSetParameter(handle, *pTestConfig, pTestArgV, &encOP, &encParam, frameIdx, fieldDone, cfgParam, vbRoi);
+
+        // >>> case: SBM path
+        if (pTestArgV->sbmEnable) {
+            Uint32 sbMode   =  (pTestArgV->sbmMode > 0) ? (Uint32)pTestArgV->sbmMode : 3;
+            Uint32 sbNb     = (pTestArgV->sbmNb > 0) ? (Uint32)pTestArgV->sbmNb : 5;
+            Uint32 sbSize   = (pTestArgV->sbmSize != 0) ? 1 : 0;
+            Uint32 yStride  = (Uint32)framebufStride;
+            Uint32 uvStride = encOP.cbcrInterleave ? yStride : (yStride >> 1);
+            Uint32 totalSlices;
+
+            // Step 1: reset the SBM state machine for this frame
+            coda988_sbm_reset();
+
+            // Step 2: sbm settings
+            coda988_sbm_setup(sbMode, sbNb, sbSize,
+                              fbSrc[srcFrameIdx].bufY,
+                              fbSrc[srcFrameIdx].bufCb,
+                              yStride,
+                              (Uint32)encOP.picHeight);
+            //vpss_sbm_int
+
+            // Step 3: push all slices (simulate producer completing the frame)
+            totalSlices = coda988_sbm_push_all_slices(sbSize, (Uint32)encOP.picHeight);
+            //start_vpss_sbm
+
+            // /* Step 4: tell the encoder to use the SBM buffer address.
+            encParam.sourceFrame->bufY  = 0x80000000;//fbSrc[srcFrameIdx].bufY;
+            encParam.sourceFrame->bufCb = 0x80080000;//fbSrc[srcFrameIdx].bufCb;
+            encParam.sourceFrame->bufCr = -1;//fbSrc[srcFrameIdx].bufCr;
+
+            VLOG(INFO, "[SBM] frame %d: sbNb=%u sbSize=%u totalSlices=%u "
+                 "ybase=0x%08x uvbase=0x%08x\n",
+                 frameIdx, sbNb, sbSize, totalSlices,
+                 (Uint32)fbSrc[srcFrameIdx].bufY,
+                 (Uint32)fbSrc[srcFrameIdx].bufCb);
+        }
 
         // Start encoding a frame.
 #ifdef AUTO_FRM_SKIP_DROP

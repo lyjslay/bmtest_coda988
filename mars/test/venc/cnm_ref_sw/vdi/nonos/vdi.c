@@ -30,7 +30,7 @@
 // !!! This need to modify in FPGA eval
 //DONE:03-24已根据memory map修改
 #define VDI_SRAM_BASE_ADDR		0x0BC00000
-#define VDI_SRAM_SIZE			0x20000
+#define VDI_SRAM_SIZE			0x5A00
 // !!! This need to modify in FPGA eval
 //DONE:03-24 bmtest在0x80000000，预留24M给bmtest，VPU用0x8200_0000~0x82FF_FFFF
 #define VPU_DRAM_PHYSICAL_BASE	0x82000000
